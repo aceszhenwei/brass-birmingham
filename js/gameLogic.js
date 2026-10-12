@@ -222,6 +222,17 @@ class GameLogic {
     executeBuild(playerId, cityId, slotIndex, industryType, cardIndex) {
         const isFarm = isBreweryFarm(cityId);
 
+        // The target must be one the Build action actually offers (slot type,
+        // era, network, overbuild and slot-preference rules), and the card
+        // must be one that can pay for it.
+        const target = { cityId, slotIndex, industryType };
+        const legal = this.getValidBuildTargets(playerId).some(t =>
+            t.cityId === cityId && t.slotIndex === slotIndex && t.industryType === industryType);
+        if (!legal) return { success: false, message: 'You cannot build that there' };
+        if (!this.getValidCardsForAction(playerId, ACTIONS.BUILD, target).includes(cardIndex)) {
+            return { success: false, message: 'That card cannot be used for this build' };
+        }
+
         // Validate cost before consuming the tile — calculateBuildCost uses getNextTile
         // internally, so calling useNextTile first would advance the tile pointer and
         // compute cost for the wrong (next-level) tile.
@@ -398,10 +409,19 @@ class GameLogic {
         return targets;
     }
 
-    executeNetwork(playerId, connectionId, cardIndex) {
+    // options.coalMineKey: which of several equally close mines supplies the
+    // rail link's coal (see getRailCoalOptions); defaults to the first.
+    executeNetwork(playerId, connectionId, cardIndex, options = {}) {
         const player = this.state.players[playerId];
         const conn = CONNECTIONS.find(c => c.id === connectionId);
         if (!conn) return { success: false, message: 'Invalid connection' };
+
+        if (!this.isValidCardIndex(playerId, cardIndex)) {
+            return { success: false, message: 'Select a card to discard' };
+        }
+        if (!this.getValidNetworkTargets(playerId).some(t => t.connectionId === connectionId)) {
+            return { success: false, message: 'You cannot build that link' };
+        }
 
         const era = this.state.era;
         const linkType = era === ERA.CANAL ? 'canal' : 'rail';
@@ -411,15 +431,15 @@ class GameLogic {
             this.state.spendMoney(playerId, CANAL_LINK_COST);
         } else {
             let totalCost = RAIL_LINK_COST;
-            // Consume coal for rail — check both endpoints, use cheapest source
-            const src = this.findCheapestCoalForLink(conn, playerId);
-            if (src) {
-                if (src.type === 'mine') {
-                    this.state.consumeResource(src.key);
-                } else {
-                    totalCost += src.price;
-                    this.state.takeMarketCoal();
-                }
+            // Consume coal from the closest mine to either end of the link
+            // (options.coalMineKey picks between equally close mines)
+            const src = this.findCheapestCoalForLink(conn, playerId, options.coalMineKey);
+            if (!src) return { success: false, message: 'No coal available for this rail link' };
+            if (src.type === 'mine') {
+                this.state.consumeResource(src.key);
+            } else {
+                totalCost += src.price;
+                this.state.takeMarketCoal();
             }
             this.state.spendMoney(playerId, totalCost);
         }
@@ -453,52 +473,26 @@ class GameLogic {
     // brewery must be connected to the SECOND link.
     // ------------------------------------------------------------------
 
-    // Candidate second links, assuming firstConnId has just been placed.
+    // Candidate second links for firstConnId. Each candidate is fully
+    // dry-run (adjacency, both coals in order, beer and the £15 + coal total)
+    // so the UI only ever offers a second link the player can actually build.
     getValidSecondRailLinks(playerId, firstConnId) {
         if (this.state.era !== ERA.RAIL) return [];
-        const player = this.state.players[playerId];
-        if (player.linksRemaining.rail < 2) return [];
-
-        const firstConn = CONNECTIONS.find(c => c.id === firstConnId);
-        if (!firstConn) return [];
-
-        // Temporarily place the first link to evaluate second-link options
-        const hadLink = this.state.boardLinks[firstConnId];
-        this.state.boardLinks[firstConnId] = { playerId, type: 'rail' };
+        if (this.state.players[playerId].linksRemaining.rail < 2) return [];
+        if (!CONNECTIONS.some(c => c.id === firstConnId)) return [];
 
         const targets = [];
-        try {
-            for (const conn of CONNECTIONS) {
-                if (conn.id === firstConnId) continue;
-                if (this.state.boardLinks[conn.id]) continue;
-                if (!conn.rail) continue;
-
-                const end1 = this.state.isInNetwork(playerId, conn.cities[0]);
-                const end2 = this.state.isInNetwork(playerId, conn.cities[1]);
-                if (!end1 && !end2) continue;
-
-                // Coal for the second link (with the first link on the board).
-                // Note: full affordability (£15 + both coals) is validated in
-                // executeNetworkDouble; here we price the second coal only.
-                const coalSource = this.findCheapestCoalForLink(conn, playerId);
-                if (!coalSource) continue;
-
-                // Beer: own breweries anywhere, or opponent breweries
-                // connected to this (second) link. No merchant beer.
-                const beer = this.findBeerForLink(playerId, conn);
-                if (!beer) continue;
-
-                targets.push({
-                    connectionId: conn.id,
-                    cities: conn.cities,
-                    coalCost: coalSource.free ? 0 : coalSource.price,
-                });
-            }
-        } finally {
-            if (hadLink) this.state.boardLinks[firstConnId] = hadLink;
-            else delete this.state.boardLinks[firstConnId];
+        for (const conn of CONNECTIONS) {
+            if (conn.id === firstConnId || !conn.rail || this.state.boardLinks[conn.id]) continue;
+            const plan = this.runDoubleRail(playerId, firstConnId, conn.id, false);
+            if (!plan.ok) continue;
+            targets.push({
+                connectionId: conn.id,
+                cities: conn.cities,
+                coalCost: plan.coalCost2,
+                totalCost: plan.totalCost,
+            });
         }
-
         return targets;
     }
 
@@ -542,21 +536,43 @@ class GameLogic {
         return null;
     }
 
-    executeNetworkDouble(playerId, connectionId1, connectionId2, cardIndex) {
+    executeNetworkDouble(playerId, connectionId1, connectionId2, cardIndex, options = {}) {
+        if (!this.isValidCardIndex(playerId, cardIndex)) {
+            return { success: false, message: 'Select a card to discard' };
+        }
+        const result = this.runDoubleRail(playerId, connectionId1, connectionId2, true, options);
+        if (!result.ok) return { success: false, message: result.message };
+
+        this.discardCard(playerId, cardIndex);
+        const conn1 = CONNECTIONS.find(c => c.id === connectionId1);
+        const conn2 = CONNECTIONS.find(c => c.id === connectionId2);
+        const name = id => CITIES[id]?.name || MERCHANTS[id]?.name || id;
+        return {
+            success: true,
+            message: `Built 2 rail links: ${name(conn1.cities[0])} - ${name(conn1.cities[1])} and ${name(conn2.cities[0])} - ${name(conn2.cities[1])} (1 beer consumed)`,
+        };
+    }
+
+    // Shared double-rail procedure. Each link is placed in turn and its coal
+    // sourced with it on the board (mine cubes are decremented without
+    // flipping, so the second link sees the first link's consumption). With
+    // commit=false, or on any failure, every change is undone. With
+    // commit=true the action is applied: emptied mines flip, the beer is
+    // consumed and money/link tiles are spent.
+    // options.coalMineKey1 / coalMineKey2 choose between equally close mines.
+    // Returns { ok, message, totalCost, coalCost2 }.
+    runDoubleRail(playerId, connectionId1, connectionId2, commit, options = {}) {
         const player = this.state.players[playerId];
         const conn1 = CONNECTIONS.find(c => c.id === connectionId1);
         const conn2 = CONNECTIONS.find(c => c.id === connectionId2);
-        if (!conn1 || !conn2) return { success: false, message: 'Invalid connection' };
-        if (this.state.era !== ERA.RAIL) return { success: false, message: 'Double links are Rail Era only' };
-        if (player.linksRemaining.rail < 2) return { success: false, message: 'Not enough rail links' };
+        if (!conn1 || !conn2 || connectionId1 === connectionId2) return { ok: false, message: 'Invalid connection' };
+        if (this.state.era !== ERA.RAIL) return { ok: false, message: 'Double links are Rail Era only' };
+        if (!conn1.rail || !conn2.rail) return { ok: false, message: 'Not a railway line' };
+        if (player.linksRemaining.rail < 2) return { ok: false, message: 'Not enough rail links' };
         if (this.state.boardLinks[connectionId1] || this.state.boardLinks[connectionId2]) {
-            return { success: false, message: 'Connection already built' };
+            return { ok: false, message: 'Connection already built' };
         }
 
-        // --- Validation phase: place links and dry-run coal consumption ---
-        // (mine cubes are decremented without flipping so the second link's
-        // sourcing sees the first link's consumption; everything is undone
-        // on failure, and flips are applied only on commit)
         const undo = [];
         const consumedMines = [];
         const dryConsumeCoal = (src) => {
@@ -565,21 +581,16 @@ class GameLogic {
                 tile.resourceCubes--;
                 consumedMines.push({ key: src.key, tile });
                 undo.push(() => tile.resourceCubes++);
-            } else {
-                if (this.state.coalMarket > 0) {
-                    this.state.coalMarket--;
-                    undo.push(() => this.state.coalMarket++);
-                }
+            } else if (this.state.coalMarket > 0) {
+                this.state.coalMarket--;
+                undo.push(() => this.state.coalMarket++);
             }
         };
-        const fail = (message) => {
-            while (undo.length) undo.pop()();
-            return { success: false, message };
-        };
+        const rollback = () => { while (undo.length) undo.pop()(); };
+        const fail = (message) => { rollback(); return { ok: false, message }; };
 
         // Link 1: adjacency (or the empty-board exception), then coal
-        const hasNoTiles = this.playerHasNoTilesOnBoard(playerId);
-        if (!hasNoTiles &&
+        if (!this.playerHasNoTilesOnBoard(playerId) &&
             !this.state.isInNetwork(playerId, conn1.cities[0]) &&
             !this.state.isInNetwork(playerId, conn1.cities[1])) {
             return fail('First link is not adjacent to your network');
@@ -587,9 +598,9 @@ class GameLogic {
         this.state.boardLinks[connectionId1] = { playerId, type: 'rail' };
         undo.push(() => delete this.state.boardLinks[connectionId1]);
 
-        const coalSrc1 = this.findCheapestCoalForLink(conn1, playerId);
+        const coalSrc1 = this.findCheapestCoalForLink(conn1, playerId, options.coalMineKey1);
         if (!coalSrc1) return fail('No coal for first link');
-        let totalCost = RAIL_DOUBLE_LINK_COST + (coalSrc1.free ? 0 : coalSrc1.price);
+        const coalCost1 = coalSrc1.free ? 0 : coalSrc1.price;
         dryConsumeCoal(coalSrc1);
 
         // Link 2: adjacency with link 1 on the board, then coal + beer
@@ -600,14 +611,23 @@ class GameLogic {
         this.state.boardLinks[connectionId2] = { playerId, type: 'rail' };
         undo.push(() => delete this.state.boardLinks[connectionId2]);
 
-        const coalSrc2 = this.findCheapestCoalForLink(conn2, playerId);
+        const coalSrc2 = this.findCheapestCoalForLink(conn2, playerId, options.coalMineKey2);
         if (!coalSrc2) return fail('No coal for second link');
-        totalCost += coalSrc2.free ? 0 : coalSrc2.price;
+        const coalCost2 = coalSrc2.free ? 0 : coalSrc2.price;
         dryConsumeCoal(coalSrc2);
 
+        // Beer: own breweries anywhere, or opponents' connected to link 2.
+        // Merchant beer is not allowed.
         const beer = this.findBeerForLink(playerId, conn2);
         if (!beer) return fail('No beer available for the second link');
+
+        const totalCost = RAIL_DOUBLE_LINK_COST + coalCost1 + coalCost2;
         if (totalCost > player.money) return fail('Cannot afford both links');
+
+        if (!commit) {
+            rollback();
+            return { ok: true, message: '', totalCost, coalCost2 };
+        }
 
         // --- Commit ---
         // Flip any mines the dry-run emptied (grants their owner income)
@@ -617,36 +637,50 @@ class GameLogic {
         this.state.consumeResource(beer.key);
         this.state.spendMoney(playerId, totalCost);
         player.linksRemaining.rail -= 2;
-        this.discardCard(playerId, cardIndex);
-
-        const name = id => CITIES[id]?.name || MERCHANTS[id]?.name || id;
-        return {
-            success: true,
-            message: `Built 2 rail links: ${name(conn1.cities[0])} - ${name(conn1.cities[1])} and ${name(conn2.cities[0])} - ${name(conn2.cities[1])} (1 beer consumed)`,
-        };
+        return { ok: true, message: '', totalCost, coalCost2 };
     }
 
-    // Find the cheapest coal source reachable from either endpoint of a connection.
-    // Returns the best source object or null if no coal is available.
-    findCheapestCoalForLink(conn, playerId) {
-        const seen = new Set();
-        const candidates = [];
+    // Coal options for a rail link. Rulebook: coal comes from the closest
+    // connected unflipped mine (fewest links distant), with the link counted
+    // as already placed — so distance is measured from whichever endpoint is
+    // nearer, and a mine AT either endpoint is distance 0. Market coal is only
+    // an option when no mine is reachable (and an endpoint reaches a merchant).
+    // Returns { mines: [{ key, distance }] — the equally-closest mines, among
+    // which the player may choose — and market: source or null }.
+    getRailCoalOptions(conn, playerId) {
+        const mineDistance = new Map(); // mine key -> nearest distance
+        let market = null;
 
         for (const cityId of conn.cities) {
-            const sources = this.state.findCoalSource(cityId, playerId);
-            for (const src of sources) {
-                const dedupeKey = src.type === 'mine' ? src.key : 'market';
-                if (!seen.has(dedupeKey)) {
-                    seen.add(dedupeKey);
-                    candidates.push(src);
+            for (const src of this.state.findCoalSource(cityId, playerId)) {
+                if (src.type === 'mine') {
+                    const prev = mineDistance.get(src.key);
+                    if (prev === undefined || src.distance < prev) mineDistance.set(src.key, src.distance);
+                } else if (!market || src.price < market.price) {
+                    market = src;
                 }
             }
         }
 
-        if (candidates.length === 0) return null;
-        // Prefer free (board mine) over market; among market entries pick lowest price
-        candidates.sort((a, b) => (a.free ? 0 : a.price) - (b.free ? 0 : b.price));
-        return candidates[0];
+        if (mineDistance.size === 0) return { mines: [], market };
+        const closest = Math.min(...mineDistance.values());
+        const mines = [...mineDistance.entries()]
+            .filter(([, d]) => d === closest)
+            .map(([key, distance]) => ({ key, distance }));
+        return { mines, market: null };
+    }
+
+    // The coal source a rail link will consume: the closest mine (or the
+    // preferred one, if it is among the equally-closest), else market coal.
+    // Returns a source object ({ type: 'mine', key, free } or a market entry)
+    // or null if no coal is available.
+    findCheapestCoalForLink(conn, playerId, preferredMineKey = null) {
+        const { mines, market } = this.getRailCoalOptions(conn, playerId);
+        if (mines.length > 0) {
+            const pick = mines.find(m => m.key === preferredMineKey) || mines[0];
+            return { type: 'mine', key: pick.key, distance: pick.distance, free: true };
+        }
+        return market;
     }
 
     // ========================================================================
@@ -688,26 +722,63 @@ class GameLogic {
         return types;
     }
 
+    // The tile a Develop would remove from `type`, `skip` tiles further down
+    // the stack (skip=1 when the same industry is developed twice in one
+    // action: the second removal takes the tile under the first).
+    peekDevelopTile(playerId, type, skip = 0) {
+        const tiles = this.state.players[playerId].industryTiles[type];
+        if (!tiles) return null;
+        return tiles.filter(t => !t.used)[skip] || null;
+    }
+
+    // Can the player develop type1 (and optionally type2) in one action?
+    // Each removed tile must be the lowest of its industry at the moment it
+    // is removed and must not carry the "cannot develop" (lightbulb) icon,
+    // and the player must be able to pay for 1 iron per tile.
+    canDevelopTypes(playerId, type1, type2 = null) {
+        const tile1 = this.peekDevelopTile(playerId, type1, 0);
+        if (!tile1 || !tile1.canDevelop) {
+            return { ok: false, message: 'That tile cannot be developed' };
+        }
+        if (type2) {
+            const tile2 = this.peekDevelopTile(playerId, type2, type2 === type1 ? 1 : 0);
+            if (!tile2 || !tile2.canDevelop) {
+                return { ok: false, message: 'The second tile cannot be developed' };
+            }
+        }
+        const count = type2 ? 2 : 1;
+        const ironSources = this.state.findIronSource(playerId);
+        if (ironSources.length < count) return { ok: false, message: 'Not enough iron available' };
+        const ironCost = ironSources.slice(0, count).reduce((sum, src) => sum + (src.free ? 0 : src.price), 0);
+        if (ironCost > this.state.players[playerId].money) {
+            return { ok: false, message: 'Cannot afford market iron' };
+        }
+        return { ok: true, message: '', ironCost };
+    }
+
+    // Industries that may be developed as the SECOND tile after firstType
+    // (legal and affordable), for the UI and AI.
+    getSecondDevelopOptions(playerId, firstType) {
+        const options = [];
+        for (const type of Object.keys(this.state.players[playerId].industryTiles)) {
+            if (!this.canDevelopTypes(playerId, firstType, type).ok) continue;
+            const tile = this.peekDevelopTile(playerId, type, type === firstType ? 1 : 0);
+            options.push({ type, tile, name: INDUSTRY_DISPLAY[type].name, level: tile.level });
+        }
+        return options;
+    }
+
     executeDevelop(playerId, industryType1, industryType2, cardIndex) {
         // Develop removes 1 or 2 tiles from player mat (uses iron)
         // industryType2 can be null for single develop
-        const player = this.state.players[playerId];
+        if (!this.isValidCardIndex(playerId, cardIndex)) {
+            return { success: false, message: 'Select a card to discard' };
+        }
+        const check = this.canDevelopTypes(playerId, industryType1, industryType2 || null);
+        if (!check.ok) return { success: false, message: check.message };
 
-        // Validate iron availability and affordability before proceeding
         const tilesToDevelop = industryType2 ? 2 : 1;
         const ironSources = this.state.findIronSource(playerId);
-        if (ironSources.length < tilesToDevelop) {
-            return { success: false, message: 'Not enough iron available' };
-        }
-
-        // Pre-check: can player afford market iron for each unit needed?
-        let moneyNeeded = 0;
-        for (let i = 0; i < tilesToDevelop; i++) {
-            if (!ironSources[i].free) moneyNeeded += ironSources[i].price;
-        }
-        if (moneyNeeded > player.money) {
-            return { success: false, message: 'Cannot afford market iron' };
-        }
 
         // Consume iron (1 per tile developed)
         for (let i = 0; i < tilesToDevelop; i++) {
@@ -772,14 +843,15 @@ class GameLogic {
             const merchantIndices = this.getSellMerchantsFor(playerId, cityId, tile.type);
             if (merchantIndices.length === 0) continue;
 
-            // Beer requirement (merchant beer counts only from these merchants)
+            // Beer requirement. A tile is sold to ONE merchant tile, so at most
+            // one merchant barrel (the one beside that tile) can count; the
+            // rest must come from breweries.
             const beerNeeded = tile.tileData.beersToSell || 0;
-            if (beerNeeded > 0) {
-                const beerSources = this.state.findBeerSources(cityId, playerId, merchantIndices);
-                if (beerSources.length < beerNeeded) continue;
-            }
-
             const merchantBeerAvailable = merchantIndices.some(i => this.state.merchantTiles[i].hasBeer);
+            if (beerNeeded > 0) {
+                const breweryBeer = this.state.findBeerSources(cityId, playerId, null).length;
+                if (breweryBeer + (merchantBeerAvailable ? 1 : 0) < beerNeeded) continue;
+            }
 
             targets.push({
                 key,
@@ -808,73 +880,132 @@ class GameLogic {
         }
     }
 
+    // Resolve a sell plan WITHOUT changing any state. Tiles are resolved in
+    // order against a running ledger of the barrels earlier tiles in the plan
+    // have already claimed, so a plan is accepted only if every tile in it can
+    // really be sold. Returns { ok, message, steps } where each step is
+    // { key, tile, merchantIndex (barrel used, or null), beerKeys }.
+    planSell(playerId, sellPlan) {
+        if (!Array.isArray(sellPlan) || sellPlan.length === 0) {
+            return { ok: false, message: 'Nothing selected to sell' };
+        }
+        const claimedBeer = {};            // brewery key -> barrels claimed
+        const claimedMerchant = new Set(); // merchant tile indices claimed
+        const seenKeys = new Set();
+        const steps = [];
+
+        for (const entry of sellPlan) {
+            const key = entry && entry.key;
+            const tile = this.state.boardIndustries[key];
+            if (!tile || seenKeys.has(key) || tile.playerId !== playerId ||
+                tile.flipped || !isSellableIndustry(tile.type)) {
+                return { ok: false, message: 'That industry cannot be sold' };
+            }
+            seenKeys.add(key);
+            const name = `${INDUSTRY_DISPLAY[tile.type].name} Lv${tile.tileData.level}`;
+
+            const [cityId] = key.split('_');
+            const merchantIndices = this.getSellMerchantsFor(playerId, cityId, tile.type);
+            if (merchantIndices.length === 0) {
+                return { ok: false, message: `No connected merchant buys the ${name}` };
+            }
+
+            let beerNeeded = tile.tileData.beersToSell || 0;
+
+            // Merchant beer, if requested: only the barrel beside the merchant
+            // tile this good is sold to — so at most one per tile. Pick the
+            // best-bonus merchant tile that still has an unclaimed barrel.
+            let merchantIndex = null;
+            if (beerNeeded > 0 && entry.useMerchantBeer) {
+                const withBeer = merchantIndices
+                    .filter(i => this.state.merchantTiles[i].hasBeer && !claimedMerchant.has(i))
+                    .sort((a, b) => this.merchantBonusValue(this.state.merchantTiles[b]) -
+                                    this.merchantBonusValue(this.state.merchantTiles[a]));
+                if (withBeer.length > 0) {
+                    merchantIndex = withBeer[0];
+                    claimedMerchant.add(merchantIndex);
+                    beerNeeded--;
+                }
+            }
+
+            // Remaining beer from breweries (own anywhere, opponents' connected).
+            // findBeerSources lists one entry per barrel, so skip the barrels
+            // earlier tiles in this plan have already claimed.
+            const beerKeys = [];
+            if (beerNeeded > 0) {
+                const seenPerKey = {};
+                for (const src of this.state.findBeerSources(cityId, playerId, null)) {
+                    if (beerKeys.length >= beerNeeded) break;
+                    seenPerKey[src.key] = (seenPerKey[src.key] || 0) + 1;
+                    if (seenPerKey[src.key] <= (claimedBeer[src.key] || 0)) continue;
+                    beerKeys.push(src.key);
+                    claimedBeer[src.key] = (claimedBeer[src.key] || 0) + 1;
+                }
+                if (beerKeys.length < beerNeeded) {
+                    return { ok: false, message: `Not enough beer to sell the ${name}` };
+                }
+            }
+
+            steps.push({ key, tile, merchantIndex, beerKeys });
+        }
+
+        return { ok: true, message: '', steps };
+    }
+
     // sellPlan: array of { key, useMerchantBeer } — tiles are sold in order.
+    // The whole plan is validated by planSell() first, so a failed sale
+    // never consumes beer or awards a merchant bonus.
     // options.autoResolveDevelop: AI resolves Gloucester develop bonuses
     // immediately; for humans the count is returned for the UI to resolve.
     executeSell(playerId, sellPlan, cardIndex, options = {}) {
         const player = this.state.players[playerId];
+        if (!this.isValidCardIndex(playerId, cardIndex)) {
+            return { success: false, message: 'Select a card to discard' };
+        }
+        const plan = this.planSell(playerId, sellPlan);
+        if (!plan.ok) return { success: false, message: plan.message };
+
         const results = [];
         let pendingDevelopBonuses = 0;
 
-        for (const entry of sellPlan) {
-            const key = entry.key;
-            const tile = this.state.boardIndustries[key];
-            if (!tile || tile.playerId !== playerId || tile.flipped) continue;
-
-            const [cityId] = key.split('_');
-            const merchantIndices = this.getSellMerchantsFor(playerId, cityId, tile.type);
-            if (merchantIndices.length === 0) continue; // no merchant accepts this good
-
-            let beerRemaining = tile.tileData.beersToSell || 0;
+        for (const step of plan.steps) {
+            const { key, tile } = step;
             const notes = [];
 
-            // Merchant beer first, if requested: pick the best-bonus merchant
-            // with a barrel among those this tile is selling to
-            if (beerRemaining > 0 && entry.useMerchantBeer) {
-                const withBeer = merchantIndices
-                    .filter(i => this.state.merchantTiles[i].hasBeer)
-                    .sort((a, b) => this.merchantBonusValue(this.state.merchantTiles[b]) -
-                                    this.merchantBonusValue(this.state.merchantTiles[a]));
-                if (withBeer.length > 0) {
-                    const mt = this.state.merchantTiles[withBeer[0]];
-                    mt.hasBeer = false;
-                    beerRemaining--;
+            if (step.merchantIndex !== null) {
+                const mt = this.state.merchantTiles[step.merchantIndex];
+                mt.hasBeer = false;
 
-                    // Consuming a merchant's beer grants that location's bonus
-                    const merchData = MERCHANTS[mt.location];
-                    switch (merchData.bonusType) {
-                        case 'vp':
-                            player.vp += merchData.bonusAmount;
-                            notes.push(`+${merchData.bonusAmount} VP (${merchData.name})`);
-                            break;
-                        case 'money':
-                            player.money += merchData.bonusAmount;
-                            notes.push(`+£${merchData.bonusAmount} (${merchData.name})`);
-                            break;
-                        case 'income':
-                            this.state.advanceIncomeSpaces(playerId, merchData.bonusAmount);
-                            notes.push(`+${merchData.bonusAmount} income spaces (${merchData.name})`);
-                            break;
-                        case 'develop':
-                            if (options.autoResolveDevelop) {
-                                const removed = this.applyFreeDevelop(playerId, merchData.bonusAmount);
-                                if (removed.length) notes.push(`free develop: ${removed.join(', ')}`);
-                            } else {
-                                pendingDevelopBonuses += merchData.bonusAmount;
-                                notes.push(`free develop earned (${merchData.name})`);
-                            }
-                            break;
-                    }
+                // Consuming a merchant's beer grants that location's bonus
+                const merchData = MERCHANTS[mt.location];
+                switch (merchData.bonusType) {
+                    case 'vp':
+                        player.vp += merchData.bonusAmount;
+                        notes.push(`+${merchData.bonusAmount} VP (${merchData.name})`);
+                        break;
+                    case 'money':
+                        player.money += merchData.bonusAmount;
+                        notes.push(`+£${merchData.bonusAmount} (${merchData.name})`);
+                        break;
+                    case 'income':
+                        this.state.advanceIncomeSpaces(playerId, merchData.bonusAmount);
+                        notes.push(`+${merchData.bonusAmount} income spaces (${merchData.name})`);
+                        break;
+                    case 'develop':
+                        if (options.autoResolveDevelop) {
+                            const removed = this.applyFreeDevelop(playerId, merchData.bonusAmount);
+                            if (removed.length) notes.push(`free develop: ${removed.join(', ')}`);
+                        } else {
+                            pendingDevelopBonuses += merchData.bonusAmount;
+                            notes.push(`free develop earned (${merchData.name})`);
+                        }
+                        break;
                 }
             }
 
-            // Remaining beer from breweries (own anywhere, opponents connected)
-            if (beerRemaining > 0) {
-                const beerSources = this.state.findBeerSources(cityId, playerId, null);
-                if (beerSources.length < beerRemaining) continue; // can't pay beer; skip tile
-                for (let i = 0; i < beerRemaining; i++) {
-                    this.state.consumeResource(beerSources[i].key);
-                }
+            // Brewery beer claimed by planSell (own anywhere, opponents connected)
+            for (const beerKey of step.beerKeys) {
+                this.state.consumeResource(beerKey);
             }
 
             // Flip the tile (advances income by the tile's spaces)
@@ -883,10 +1014,6 @@ class GameLogic {
             let line = `Sold ${INDUSTRY_DISPLAY[tile.type].name} Lv${tile.tileData.level}`;
             if (notes.length) line += ` [${notes.join('; ')}]`;
             results.push(line);
-        }
-
-        if (results.length === 0) {
-            return { success: false, message: 'Nothing could be sold' };
         }
 
         // Discard card
@@ -904,6 +1031,9 @@ class GameLogic {
     // ========================================================================
 
     executeLoan(playerId, cardIndex) {
+        if (!this.isValidCardIndex(playerId, cardIndex)) {
+            return { success: false, message: 'Select a card to discard' };
+        }
         if (!this.state.canTakeLoan(playerId)) {
             return { success: false, message: 'A loan cannot take your income below -10' };
         }
@@ -935,8 +1065,13 @@ class GameLogic {
         // cardIndices: [actionCard, extraCard1, extraCard2] (3 cards total)
         const player = this.state.players[playerId];
 
-        if (cardIndices.length !== 3) {
-            return { success: false, message: 'Must discard exactly 3 cards' };
+        if (!this.canScout(playerId)) {
+            return { success: false, message: 'You cannot scout right now' };
+        }
+        if (!Array.isArray(cardIndices) || cardIndices.length !== 3 ||
+            new Set(cardIndices).size !== 3 ||
+            !cardIndices.every(i => this.isValidCardIndex(playerId, i))) {
+            return { success: false, message: 'Must discard exactly 3 different cards' };
         }
 
         // Remove cards in reverse index order to maintain indices
@@ -969,6 +1104,9 @@ class GameLogic {
     // ========================================================================
 
     executePass(playerId, cardIndex) {
+        if (!this.isValidCardIndex(playerId, cardIndex)) {
+            return { success: false, message: 'Select a card to discard' };
+        }
         this.discardCard(playerId, cardIndex);
         return { success: true, message: 'Passed' };
     }
@@ -1049,6 +1187,12 @@ class GameLogic {
     // ========================================================================
     // Card Management
     // ========================================================================
+
+    // Is cardIndex a real card in the player's hand?
+    isValidCardIndex(playerId, cardIndex) {
+        const player = this.state.players[playerId];
+        return Number.isInteger(cardIndex) && cardIndex >= 0 && cardIndex < player.hand.length;
+    }
 
     discardCard(playerId, cardIndex) {
         const player = this.state.players[playerId];

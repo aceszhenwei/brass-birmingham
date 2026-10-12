@@ -216,6 +216,28 @@ Disabled action buttons show **tooltips explaining why** they can't be used (e.g
 
 The game handles all resource sourcing (coal, iron, beer), market pricing, turn order, and scoring automatically.
 
+### Running the Tests
+
+The rules engine has an automated test suite that runs in Node.js (v18+) with
+no browser and no dependencies — it uses Node's built-in test runner:
+
+```
+node --test test/*.test.js
+```
+
+`BRASS_SIM_GAMES=100 node --test test/*.test.js` raises the number of full
+AI-vs-AI games the suite plays per player count (default 10). For the large
+headless regression run, with per-player-count statistics:
+
+```
+node scripts/simulate.js --games 100
+```
+
+Every simulated game runs through a strict driver: any failed AI action,
+engine exception, broken state invariant or wrong round count fails the run.
+The game itself still opens directly from `index.html`; the tests load the
+same script files into a Node `vm` context.
+
 ### Tips for New Players
 
 - **Build breweries early** — Beer is the most contested resource in the game
@@ -232,7 +254,9 @@ This implementation follows the official Brass: Birmingham rulebook:
 
 - **Coal** requires a connected source (mine or market via merchant link)
 - **Iron** can be taken from any iron works on the board — no connection needed
-- **Beer** for selling comes from your own breweries (anywhere), connected opponent breweries, or merchant barrels
+- **Coal for a rail link** comes from the mine closest to either end of the new link; equally close mines are the player's choice
+- **Beer** for selling comes from your own breweries (anywhere), connected opponent breweries, or the one barrel beside the merchant tile you sell to
+- **A sale is all-or-nothing** — if the selected tiles can't all be sold with the available beer, nothing is spent
 - **Overbuilding** your own tiles requires same type + higher level; opponent coal/iron tiles can only be overbuilt when that resource is globally depleted
 - **Pottery I and III** have the lightbulb icon and cannot be developed — they must be built
 - **Turn order** each round goes to whoever spent the least money
@@ -257,6 +281,11 @@ fallback.
 | `js/boardRenderer.js` | SVG board: procedural terrain, frame + score track, calibration mode |
 | `js/uiManager.js` | Phase bar, card selection mode, game log, turn transitions, modals |
 | `js/main.js` | Entry point, setup screen |
+| `js/aiPlayer.js` | Heuristic AI opponent (Easy / Normal / Hard) |
+| `test/*.test.js` | `node:test` suite: setup, all 7 actions, resources, turns/eras, scoring, regressions, AI games |
+| `test/helpers/` | Engine loader (`vm`), scenario builders, strict headless driver, state invariants, DOM stub |
+| `scripts/simulate.js` | Headless AI-vs-AI regression run |
+| `docs/` | Rules audit and assignment reports |
 
 ---
 
@@ -264,7 +293,7 @@ fallback.
 
 - **Brass: Birmingham** designed by Gavan Brown, Matt Tolman, and Martin Wallace
 - Published by [Roxley Games](https://roxley.com)
-- Tile data verified against the [Tabletop Simulator](https://github.com/ikegami/tts_brass) implementation by Kini/ikegami
+- Tile data verified against the [Tabletop Simulator](https://github.com/ikegami/tts_brass) implementation by Kini/ikegami, and against the retail player mat and tile art bundled in `assets/` (see `docs/brass-review-findings.md`, C7)
 - Board geography and card data referenced from community implementations
 
 ---
