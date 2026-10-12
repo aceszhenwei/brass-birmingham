@@ -105,7 +105,7 @@ if (MODE === 'search') {
         }
     }
     console.log(`## Search space and cost: ${PLAYERS} players, ${SEEDS} production games (Normal)\n`);
-    console.log('| Phase | Decisions | Legal moves: median / p95 / max | With choices expanded: median / max | Second action of the turn | getLegalMoves ms (median / max) | Expanded ms (median / max) | getObservation ms | clone ms | applyMove ms | Heuristic decision ms (median / max) |');
+    console.log('| Phase | Decisions | Legal moves: median / p95 / max | With choices expanded: median / max | Last action of a turn | getLegalMoves ms (median / max) | Expanded ms (median / max) | getObservation ms | clone ms | applyMove ms | Heuristic decision ms (median / max) |');
     console.log('|---|---|---|---|---|---|---|---|---|---|---|');
     for (const [phase, r] of Object.entries(rows)) {
         const col = (k) => r.map(x => x[k]);
