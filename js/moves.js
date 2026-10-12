@@ -277,6 +277,7 @@ const MoveEngine = {
 
     // Translate an AI decision ({ action, pendingData, cardIndex }) into a move
     moveFromDecision(decision) {
+        if (decision.move) return cloneMove(decision.move);   // an AI move with its choices made
         const pd = decision.pendingData || {};
         switch (decision.action) {
             case ACTIONS.BUILD:

@@ -2,12 +2,13 @@
 // Assignment 5: legality, fairness and decision-coverage probe for the
 // existing AI (docs/research/ai-baseline-audit.md, section 2).
 //
-//   node scripts/research/ai-audit.js [--games 10] [--players 2,3,4] [--baseline a5|a6|a8]
+//   node scripts/research/ai-audit.js [--games 10] [--players 2,3,4] [--baseline a5|a6|a8|a9]
 //
 // By default it probes the current AI; --baseline a5 probes the Assignment 5
 // baseline (AIPlayer.LEGACY_A5), which reproduces the Assignment 5 tables, and
 // --baseline a6 the AI of Assignments 6-7 (AIPlayer.LEGACY_A6, the Assignment 6 tables),
-// --baseline a8 the AI of Assignment 8 (AIPlayer.LEGACY_A8).
+// --baseline a8 the AI of Assignment 8 (AIPlayer.LEGACY_A8), --baseline a9 the AI
+// of Assignment 9 (AIPlayer.LEGACY_A9).
 //
 // Plays all-AI games at each difficulty (seeds 1000*players + i, the same
 // seeds as scripts/simulate.js) and, at EVERY AI decision, checks:
@@ -38,7 +39,7 @@ function arg(name, fallback) {
 const GAMES = Number(arg('games', 10));
 const PLAYERS = String(arg('players', '2,3,4')).split(',').map(Number);
 const E = loadEngine();
-const BASELINES = { a5: E.AIPlayer.LEGACY_A5, a6: E.AIPlayer.LEGACY_A6, a8: E.AIPlayer.LEGACY_A8 };
+const BASELINES = { a5: E.AIPlayer.LEGACY_A5, a6: E.AIPlayer.LEGACY_A6, a8: E.AIPlayer.LEGACY_A8, a9: E.AIPlayer.LEGACY_A9 };
 const OPTIONS = BASELINES[arg('baseline', '')] || null;
 const LEGACY = OPTIONS === E.AIPlayer.LEGACY_A5;   // no correction columns for the uncorrected AI
 

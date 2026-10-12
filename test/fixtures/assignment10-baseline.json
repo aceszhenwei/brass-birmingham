@@ -1,0 +1,42 @@
+{
+ "generatedFrom": "the production AI since Assignment 10",
+ "scheme": "seed 6000+1000*players+i, difficulty easy/normal/hard by seed, each AI with its own seeded stream",
+ "games": {
+  "2": [
+   {"seed":8001,"difficulty":"normal","steps":78,"vp":[76,2],"fingerprint":"e56cd131"},
+   {"seed":8002,"difficulty":"hard","steps":78,"vp":[96,72],"fingerprint":"99c8ba16"},
+   {"seed":8003,"difficulty":"easy","steps":78,"vp":[68,11],"fingerprint":"63cb0b76"},
+   {"seed":8004,"difficulty":"normal","steps":78,"vp":[88,85],"fingerprint":"9ee1a6b4"},
+   {"seed":8005,"difficulty":"hard","steps":78,"vp":[67,82],"fingerprint":"46d0c710"},
+   {"seed":8006,"difficulty":"easy","steps":78,"vp":[79,90],"fingerprint":"95fa7908"},
+   {"seed":8007,"difficulty":"normal","steps":78,"vp":[74,66],"fingerprint":"9b5a8476"},
+   {"seed":8008,"difficulty":"hard","steps":78,"vp":[75,83],"fingerprint":"139f89b3"},
+   {"seed":8009,"difficulty":"easy","steps":78,"vp":[84,75],"fingerprint":"3834ec2d"},
+   {"seed":8010,"difficulty":"normal","steps":78,"vp":[67,81],"fingerprint":"88d13abc"}
+  ],
+  "3": [
+   {"seed":9001,"difficulty":"normal","steps":105,"vp":[100,72,77],"fingerprint":"6b2142bb"},
+   {"seed":9002,"difficulty":"hard","steps":105,"vp":[92,6,67],"fingerprint":"4b799cd9"},
+   {"seed":9003,"difficulty":"easy","steps":105,"vp":[63,60,68],"fingerprint":"7df21710"},
+   {"seed":9004,"difficulty":"normal","steps":105,"vp":[50,51,0],"fingerprint":"64e587aa"},
+   {"seed":9005,"difficulty":"hard","steps":105,"vp":[56,93,0],"fingerprint":"c1917967"},
+   {"seed":9006,"difficulty":"easy","steps":105,"vp":[2,0,2],"fingerprint":"25d3bb1f"},
+   {"seed":9007,"difficulty":"normal","steps":105,"vp":[81,61,23],"fingerprint":"c7c5eb4a"},
+   {"seed":9008,"difficulty":"hard","steps":105,"vp":[77,85,68],"fingerprint":"6288f385"},
+   {"seed":9009,"difficulty":"easy","steps":105,"vp":[49,0,52],"fingerprint":"1aac99c4"},
+   {"seed":9010,"difficulty":"normal","steps":105,"vp":[89,72,89],"fingerprint":"dd6dc6b4"}
+  ],
+  "4": [
+   {"seed":10001,"difficulty":"normal","steps":124,"vp":[73,55,89,68],"fingerprint":"78b55dad"},
+   {"seed":10002,"difficulty":"hard","steps":124,"vp":[49,0,58,54],"fingerprint":"88f43f20"},
+   {"seed":10003,"difficulty":"easy","steps":124,"vp":[43,56,73,72],"fingerprint":"0b265e27"},
+   {"seed":10004,"difficulty":"normal","steps":124,"vp":[50,64,68,8],"fingerprint":"8fdfa640"},
+   {"seed":10005,"difficulty":"hard","steps":124,"vp":[74,80,79,103],"fingerprint":"368fdcac"},
+   {"seed":10006,"difficulty":"easy","steps":124,"vp":[74,75,39,69],"fingerprint":"bdd42263"},
+   {"seed":10007,"difficulty":"normal","steps":124,"vp":[67,84,72,57],"fingerprint":"fd15d281"},
+   {"seed":10008,"difficulty":"hard","steps":124,"vp":[0,0,40,78],"fingerprint":"8ca523ca"},
+   {"seed":10009,"difficulty":"easy","steps":124,"vp":[65,69,66,53],"fingerprint":"d2ccd5cc"},
+   {"seed":10010,"difficulty":"normal","steps":124,"vp":[68,64,49,57],"fingerprint":"1af90c6a"}
+  ]
+ }
+}

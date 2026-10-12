@@ -14,6 +14,8 @@
 // Selling (Assignment 9): a sellable industry built where it cannot be sold
 // yet (no connected merchant buys it, or not enough beer) is valued with its
 // measured sale probability instead of an optimistic one.
+// Assignment 10: in the Rail Era the AI also considers building two rail
+// links in one action, and it does not Develop in the game's last two rounds.
 //
 // Research baselines: chooseAction(..., options) with AIPlayer.LEGACY_A5
 // reproduces the AI exactly as audited in Assignment 5, including its two
@@ -21,7 +23,8 @@
 // is wrong for half of each era). AIPlayer.LEGACY_A6 reproduces the AI of
 // Assignments 6-7 (overbuilds scored as if the space were empty), and
 // AIPlayer.LEGACY_A8 the AI of Assignment 8 (sale probability 0.6 for
-// sellable tiles that cannot be sold yet). They exist
+// sellable tiles that cannot be sold yet), and AIPlayer.LEGACY_A9 the AI of
+// Assignment 9 (single links only; Develop until the end). They exist
 // only so experiments can compare against them (docs/research/); the game
 // never uses them.
 // ============================================================================
@@ -36,10 +39,11 @@ const AIPlayer = (() => {
     const FLEX_WEIGHT = 0.8;
 
     // Per-call options (see chooseAction)
-    const DEFAULT_OPTIONS = Object.freeze({ information: 'player', rounds: 'engine', loan: 'a6', overbuild: 'opportunity', develop: 'a8', sell: 'calibrated' });
-    const LEGACY_A5 = Object.freeze({ information: 'full', rounds: 'deck-estimate', overbuild: 'a6', sell: 'a8' });
-    const LEGACY_A6 = Object.freeze({ overbuild: 'a6', sell: 'a8' });
-    const LEGACY_A8 = Object.freeze({ sell: 'a8' });
+    const DEFAULT_OPTIONS = Object.freeze({ information: 'player', rounds: 'engine', loan: 'a6', overbuild: 'opportunity', develop: 'horizon', sell: 'calibrated', network: 'double', cards: 'first', sourcing: 'engine', shortfall: 'a9' });
+    const LEGACY_A9 = Object.freeze({ network: 'single', develop: 'a8' });
+    const LEGACY_A5 = Object.freeze({ information: 'full', rounds: 'deck-estimate', overbuild: 'a6', sell: 'a8', ...LEGACY_A9 });
+    const LEGACY_A6 = Object.freeze({ overbuild: 'a6', sell: 'a8', ...LEGACY_A9 });
+    const LEGACY_A8 = Object.freeze({ sell: 'a8', ...LEGACY_A9 });
     let options = DEFAULT_OPTIONS;
 
     // ------------------------------------------------------------------
@@ -94,9 +98,25 @@ const AIPlayer = (() => {
     }
 
     // Prefer a non-wild matching card over a wild one when both are legal.
+    // options.cards 'useful': for actions that only discard a card (Network,
+    // Develop, Sell, Loan, Pass), discard the least useful one instead of
+    // the first: cardUsefulness, plus 1 if the card could build right now.
     function pickCardIndex(logic, playerId, action, target, player) {
         const validIndices = logic.getValidCardsForAction(playerId, action, target);
         if (validIndices.length === 0) return null;
+        // 'buildable' only keeps cards that could build right now: it
+        // discards the first card that could not (else the first card).
+        if (options.cards === 'buildable' && action !== ACTIONS.BUILD) {
+            const buildable = buildableCardIndices(logic, playerId);
+            const dead = validIndices.find(idx => !buildable.has(idx) &&
+                player.hand[idx].type !== CARD_TYPES.WILD_LOCATION && player.hand[idx].type !== CARD_TYPES.WILD_INDUSTRY);
+            if (dead !== undefined) return dead;
+        }
+        if (options.cards === 'useful' && action !== ACTIONS.BUILD) {
+            const buildable = buildableCardIndices(logic, playerId);
+            const value = (idx) => cardUsefulness(logic.state, logic, playerId, player.hand[idx]) + (buildable.has(idx) ? 1 : 0);
+            return validIndices.reduce((best, idx) => (value(idx) < value(best) ? idx : best));
+        }
         const nonWild = validIndices.find(idx => {
             const c = player.hand[idx];
             return c.type !== CARD_TYPES.WILD_LOCATION && c.type !== CARD_TYPES.WILD_INDUSTRY;
@@ -297,6 +317,18 @@ const AIPlayer = (() => {
         return result;
     }
 
+    // Hand indices usable for some legal Build now (cached per decision)
+    let buildableCache = null;
+    function buildableCardIndices(logic, playerId) {
+        if (buildableCache) return buildableCache;
+        const set = new Set();
+        for (const t of logic.getValidBuildTargets(playerId)) {
+            for (const i of logic.getValidCardsForAction(playerId, ACTIONS.BUILD, t)) set.add(i);
+        }
+        buildableCache = set;
+        return set;
+    }
+
     // ------------------------------------------------------------------
     // NETWORK
     // ------------------------------------------------------------------
@@ -355,6 +387,15 @@ const AIPlayer = (() => {
         const cardIndex = pickCardIndex(logic, playerId, ACTIONS.NETWORK, null, player);
         if (cardIndex === null) return null;
 
+        const double = options.network === 'double' ? bestDoubleRail(state, logic, playerId, targets, cardIndex) : null;
+        if (double && double.score > bestScore) {
+            return {
+                action: ACTIONS.NETWORK,
+                pendingData: { connectionId: double.first, connectionId2: double.second },
+                cardIndex,
+                score: double.score,
+            };
+        }
         return {
             action: ACTIONS.NETWORK,
             pendingData: { connectionId: best.connectionId },
@@ -363,14 +404,53 @@ const AIPlayer = (() => {
         };
     }
 
+    // Two rail links in one action (options.network 'double'): the first
+    // link's score plus the second's with the first in place, less the
+    // extra £5 and the barrel of beer the pair consumes. Only the best few
+    // first links are expanded, and the chosen pair is checked with the
+    // engine's planner.
+    const DOUBLE_RAIL_EXTRA_COST = 5;
+    const DOUBLE_RAIL_BEER_VALUE = 1.0;
+    function bestDoubleRail(state, logic, playerId, targets, cardIndex) {
+        const player = state.players[playerId];
+        if (state.era !== ERA.RAIL || player.linksRemaining.rail < 2) return null;
+        const firsts = targets.map(t => ({ t, score: scoreNetworkCandidate(state, logic, playerId, t) }))
+            .sort((a, b) => b.score - a.score).slice(0, 3);
+        const pairs = [];
+        for (const f of firsts) {
+            state.boardLinks[f.t.connectionId] = { playerId, type: 'rail' };
+            player.linksRemaining.rail--;
+            player.money -= f.t.cost;
+            try {
+                for (const s of logic.getValidNetworkTargets(playerId)) {
+                    pairs.push({ first: f.t.connectionId, second: s.connectionId,
+                        score: f.score + scoreNetworkCandidate(state, logic, playerId, s) });
+                }
+            } finally {
+                delete state.boardLinks[f.t.connectionId];
+                player.linksRemaining.rail++;
+                player.money += f.t.cost;
+            }
+        }
+        pairs.sort((a, b) => b.score - a.score);
+        const penalty = vpEquivalent(state, { money: -DOUBLE_RAIL_EXTRA_COST }) - DOUBLE_RAIL_BEER_VALUE;
+        for (const p of pairs.slice(0, 6)) {
+            if (logic.resolveMove(playerId, { type: ACTIONS.NETWORK, card: cardIndex, links: [p.first, p.second] }).ok) {
+                return { first: p.first, second: p.second, score: p.score + penalty };
+            }
+        }
+        return null;
+    }
+
     // ------------------------------------------------------------------
     // DEVELOP
     // ------------------------------------------------------------------
 
     function scoreDevelopPlan(state, logic, playerId) {
-        // Research variant (Assignment 9, options.develop 'horizon'): no
-        // Develop in the game's last two rounds, when the industries it
-        // unlocks are almost never built (2% of the time in the measured games)
+        // options.develop 'horizon' (default since Assignment 10): no Develop
+        // in the game's last two rounds, when the industries it unlocks are
+        // almost never built (1-7% of the time in the measured games). 'a8'
+        // develops until the end (up to Assignment 9).
         if (options.develop === 'horizon') {
             const gameRoundsLeft = state.getRoundsRemaining() + (state.era === ERA.CANAL ? ROUNDS_PER_ERA[state.numPlayers] : 0);
             if (gameRoundsLeft <= 2) return null;
@@ -705,10 +785,15 @@ const AIPlayer = (() => {
     //   explain:     true adds `explain` (every candidate's score) to the decision
     //   loan:        loan-scoring variant (see scoreLoanResult; default 'a6')
     //   overbuild:   overbuild scoring (see scoreBuildCandidate; default 'opportunity')
-    //   develop:     'a8' (default) | research variant 'horizon' (see scoreDevelopPlan)
+    //   develop:     'horizon' (default; scoreDevelopPlan) | 'a8' (up to Assignment 9)
     //   sell:        'calibrated' (default; estimateFlipProbability) | 'a8' (up to Assignment 8)
     //                | research variant 'connect' (scoreNetworkCandidate; A8 sale probabilities)
-    // AIPlayer.LEGACY_A5 / LEGACY_A6 / LEGACY_A8 restore the AI of those assignments.
+    //   network:     'double' (default; bestDoubleRail) | 'single' (up to Assignment 9)
+    //   Assignment 10 research variants (not adopted; the defaults keep the AI as before):
+    //   cards:       'first' (default) | 'useful' | 'buildable' (pickCardIndex)
+    //   sourcing:    'engine' (default) | 'own' (chooseSources)
+    //   shortfall:   'a9' (default; the engine's choice) | 'value' (chooseShortfall)
+    // AIPlayer.LEGACY_A5 / LEGACY_A6 / LEGACY_A8 / LEGACY_A9 restore the AI of those assignments.
     function chooseAction(state, logic, playerId, difficulty = 'normal', rng = null, opts = null) {
         const previous = options;
         options = opts ? { ...DEFAULT_OPTIONS, ...opts } : DEFAULT_OPTIONS;
@@ -717,13 +802,87 @@ const AIPlayer = (() => {
                 state = state.getObservation(playerId);
                 logic = new GameLogic(state);
             }
-            return decide(state, logic, playerId, difficulty, rng);
+            const decision = decide(state, logic, playerId, difficulty, rng);
+            if (options.sourcing === 'own') {
+                const move = chooseSources(state, logic, playerId, logic.moveFromDecision(decision));
+                if (move) return { ...decision, move };
+            }
+            return decision;
+        } finally {
+            options = previous;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // RESOURCE CHOICES (options.sourcing 'own')
+    // ------------------------------------------------------------------
+
+    // Where the rules leave the player a choice of coal (equally close
+    // mines), iron (any works) or beer (own breweries, connected opponents'),
+    // take the player's own source first: it moves the player's own tile
+    // toward flipping instead of an opponent's. Other choices (merchant,
+    // Gloucester develop) keep the engine's defaults. Returns the completed
+    // move, or null if there is nothing to choose.
+    function chooseSources(state, logic, playerId, move) {
+        if (![ACTIONS.BUILD, ACTIONS.NETWORK, ACTIONS.DEVELOP, ACTIONS.SELL].includes(move.type)) return null;
+        const own = (value) => {
+            if (typeof value !== 'string' || !value.includes(':')) return false;
+            const key = value.split(/:(.*)/)[1];
+            const tile = key.startsWith('farm_') ? state.breweryFarmTiles[key.slice(5)] : state.boardIndustries[key];
+            return !!tile && tile.playerId === playerId;
+        };
+        let current = move;
+        let changed = false;
+        for (let guard = 0; guard < 12; guard++) {
+            const r = logic.resolveMove(playerId, current);
+            if (!r.ok) return null;
+            const point = r.points.find(p => !p.fixed && ['coal', 'iron', 'beer'].includes(p.kind) && p.options.length > 1);
+            if (!point) break;
+            // Own sources first, then the engine's order; fix the first that
+            // still leads to a legal move
+            const ordered = [...point.options.filter(own), ...point.options.filter(o => !own(o))];
+            const value = ordered.find(v => logic.resolveMove(playerId, withChoice(current, point.slot, v)).ok);
+            if (value === undefined) return null;
+            current = withChoice(current, point.slot, value);
+            if (value !== point.options[point.index]) changed = true;
+        }
+        return changed ? current : null;
+    }
+
+    // ------------------------------------------------------------------
+    // SHORTFALL
+    // ------------------------------------------------------------------
+
+    // Which tile to sell to cover an income shortfall. The default
+    // (options.shortfall 'a9') is the engine's: unflipped tiles first, then
+    // the lowest VP. 'value' sells the tile whose loss costs least: a
+    // flipped tile its VP (and its income has already been counted); an
+    // unflipped one its chance of flipping times its VP and income, or
+    // nothing for a Canal-Era Level I tile in the era's last round.
+    function chooseShortfall(state, logic, playerId, opts = null) {
+        const previous = options;
+        options = opts ? { ...DEFAULT_OPTIONS, ...opts } : DEFAULT_OPTIONS;
+        try {
+            if (options.shortfall !== 'value') return logic.defaultShortfallMove(playerId);
+            const keys = state.ownedTileKeys(playerId);
+            const tileOf = (key) => (BREWERY_FARMS[key] ? state.breweryFarmTiles[key] : state.boardIndustries[key]);
+            const loss = (key) => {
+                const tile = tileOf(key);
+                if (tile.flipped) return tile.tileData.vp;
+                if (state.era === ERA.CANAL && tile.tileData.level === 1 && state.getRoundsRemaining() <= 1) return 0;
+                const cityId = BREWERY_FARMS[key] ? key : key.split('_')[0];
+                const p = estimateFlipProbability(state, logic, playerId, { industryType: tile.type, cityId, tileData: tile.tileData });
+                return p * vpEquivalent(state, { vp: tile.tileData.vp, income: tile.tileData.income });
+            };
+            const best = [...keys].sort((a, b) => (loss(a) - loss(b)) || (tileOf(b).tileData.cost - tileOf(a).tileData.cost))[0];
+            return { type: 'shortfall', tile: best };
         } finally {
             options = previous;
         }
     }
 
     function decide(state, logic, playerId, difficulty, rng) {
+        buildableCache = null;
         const random = rng ? () => rng.next() : Math.random;
         const results = [];
 
@@ -769,7 +928,7 @@ const AIPlayer = (() => {
         return chosen;
     }
 
-    return { chooseAction, LEGACY_A5, LEGACY_A6, LEGACY_A8, roundsRemaining: (state, opts = null) => {
+    return { chooseAction, chooseShortfall, LEGACY_A5, LEGACY_A6, LEGACY_A8, LEGACY_A9, roundsRemaining: (state, opts = null) => {
         const previous = options;
         options = opts ? { ...DEFAULT_OPTIONS, ...opts } : DEFAULT_OPTIONS;
         try { return estimateRoundsRemaining(state); } finally { options = previous; }

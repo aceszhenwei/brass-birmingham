@@ -377,10 +377,15 @@ top of `sell-calibrated` is a question for a new pre-registered experiment.
 Everything is deterministic with Node.js 22+. Raw results go to the
 git-ignored `research-a9/` folder.
 
+Since Assignment 10 the production AI also builds double rail links and stops
+developing in the last two rounds. The `^…` policies below are pinned to the
+AI of this report, and the probes take `--legacy a9` (`--baseline a9` for the
+audit), as shown.
+
 ```
 # Investigation (about 1 minute per level and player count)
-node scripts/research/ai-invest.js --players 3 --seeds 100 --levels easy,normal,hard --sell a8 > research-a9/invest-a8-3.md   # and 2, 4
-node scripts/research/ai-invest.js --players 3 --seeds 100 --levels normal                       # the new production AI; and 2, 4
+node scripts/research/ai-invest.js --players 3 --seeds 100 --levels easy,normal,hard --sell a8 --legacy a9 > research-a9/invest-a8-3.md   # and 2, 4
+node scripts/research/ai-invest.js --players 3 --seeds 100 --levels normal --legacy a9           # the new production AI; and 2, 4
 
 # Exploration
 P=normal^develop-horizon:normal^a8,normal^sell-calibrated:normal^a8,normal^sell-connect:normal^a8
@@ -400,10 +405,10 @@ node scripts/research/ai-baseline.js matchups --players 2 --seeds 100 --base-see
 node scripts/research/ai-criteria.js research-a9/explore-*.json        # and validate-*, general-*
 node scripts/research/ai-compare.js research-a9/mirror-*.json \
     --pairs normal^develop-horizon:normal^a8,normal^sell-calibrated:normal^a8,normal^sell-connect:normal^a8
-node scripts/research/ai-audit.js --games 10                                    # the new production AI
+node scripts/research/ai-audit.js --games 10 --baseline a9                      # the new production AI
 
 # Fixtures (re-record only for an intended AI change)
-node scripts/research/record-ai-baseline.js --preset current   # test/fixtures/assignment9-baseline.json
+node scripts/research/record-ai-baseline.js --preset a9        # test/fixtures/assignment9-baseline.json
 node scripts/research/record-ai-baseline.js --preset a8        # test/fixtures/assignment8-baseline.json
 ```
 
