@@ -126,10 +126,8 @@ test('Build: Farm Breweries take Brewery/Wild Industry cards, never a Wild Locat
     const { E, state, logic } = setup();
     const T = E.INDUSTRY_TYPES;
     setHand(state, 0, [wildLoc()]);
-    state.players[0].hasWildLocation = true;
     assert.equal(targetsAt(logic, 0, 'northern').length, 0);
     setHand(state, 0, [ind(T.BREWERY)]);
-    state.players[0].hasWildLocation = false;
     assert.ok(targetsAt(logic, 0, 'northern', T.BREWERY).length > 0);
     const r = logic.executeBuild(0, 'northern', 0, T.BREWERY, 0);
     assert.equal(r.success, true, r.message);
@@ -139,12 +137,11 @@ test('Build: Farm Breweries take Brewery/Wild Industry cards, never a Wild Locat
 test('Build: a played wild card returns to its pile', () => {
     const { E, state, logic } = setup();
     setHand(state, 0, [wildLoc()]);
-    state.players[0].hasWildLocation = true;
     state.wildLocationPile = 3;
     const r = logic.executeBuild(0, 'worcester', 0, E.INDUSTRY_TYPES.COTTON_MILL, 0);
     assert.equal(r.success, true, r.message);
     assert.equal(state.wildLocationPile, 4);
-    assert.equal(state.players[0].hasWildLocation, false);
+    assert.equal(state.playerHasWildCard(0), false);
 });
 
 // ---------------------------------------------------------------- NETWORK
@@ -364,11 +361,9 @@ test('Scout: discard 3 cards for a Wild Location and a Wild Industry', () => {
 test('Scout: rejected while holding a wild card, with too few cards, or with repeated cards', () => {
     const { state, logic } = setup();
     setHand(state, 0, [loc('leek'), loc('stone'), wildInd()]);
-    state.players[0].hasWildIndustry = true;
     assertRejected(state, () => logic.executeScout(0, [0, 1, 2]));
 
     setHand(state, 0, [loc('leek'), loc('stone')]);
-    state.players[0].hasWildIndustry = false;
     assertRejected(state, () => logic.executeScout(0, [0, 1, 1]));
 
     setHand(state, 0, [loc('leek'), loc('stone'), loc('derby')]);

@@ -235,8 +235,26 @@ node scripts/simulate.js --games 100
 
 Every simulated game runs through a strict driver: any failed AI action,
 engine exception, broken state invariant or wrong round count fails the run.
-The game itself still opens directly from `index.html`; the tests load the
-same script files into a Node `vm` context.
+Each game is also cloned and saved to JSON part-way through, and the original,
+the clone and the restored save must finish identically. Games are also
+compared with games recorded from the Assignment 1 code
+(`test/fixtures/assignment1-baseline.json`). The game itself still opens
+directly from `index.html`; the tests load the same script files into a Node
+`vm` context, where `Math.random` is disabled so that every random draw must
+come from the game's seeded generator.
+
+### Deterministic State, Cloning and Saves (engine API)
+
+```js
+const state = new GameState(3, names, aiConfig, { seed: 42 }); // same seed + same actions = same game
+const copy  = state.clone();                         // fully independent copy, same RNG position
+const json  = JSON.stringify(state.serialize());     // complete, versioned save (includes hidden info)
+const again = GameState.deserialize(json);           // validated restore; throws GameStateError
+const view  = state.getPlayerView(playerId);         // what one player may see
+```
+
+See [`docs/state-model.md`](docs/state-model.md) for the state model, the
+save format and the hidden-information rules. There is no save/load UI yet.
 
 ### Tips for New Players
 
@@ -274,7 +292,8 @@ fallback.
 | `index.html` | Layout: setup screen, game screen with phase bar, game log, overlays |
 | `css/style.css` | Dark Victorian theme with CSS animations, card-select mode, transitions |
 | `js/gameData.js` | All constants: tiles, cities, connections, cards, merchants, markets |
-| `js/gameState.js` | Game state, market mechanics, network pathfinding, turn management |
+| `js/random.js` | `SeededRandom`: the seeded, serializable generator behind every shuffle |
+| `js/gameState.js` | Game state, market mechanics, network pathfinding, turn management, clone / serialize / restore |
 | `js/gameLogic.js` | All 7 actions + `getDisabledReason()` for tooltip feedback |
 | `js/industryIcons.js` | Engraved industry illustrations shared by the board and hand cards |
 | `js/boardAssets.js` | Bundled board/component artwork + measured board layout |
@@ -282,10 +301,11 @@ fallback.
 | `js/uiManager.js` | Phase bar, card selection mode, game log, turn transitions, modals |
 | `js/main.js` | Entry point, setup screen |
 | `js/aiPlayer.js` | Heuristic AI opponent (Easy / Normal / Hard) |
-| `test/*.test.js` | `node:test` suite: setup, all 7 actions, resources, turns/eras, scoring, regressions, AI games |
-| `test/helpers/` | Engine loader (`vm`), scenario builders, strict headless driver, state invariants, DOM stub |
+| `test/*.test.js` | `node:test` suite: setup, all 7 actions, resources, turns/eras, scoring, regressions, determinism, cloning, serialization, AI games |
+| `test/helpers/` | Engine loader (`vm`), scenario builders, strict headless driver, state invariants, game fingerprints, DOM stub |
+| `test/fixtures/` | Games recorded from the Assignment 1 code, for behaviour comparison |
 | `scripts/simulate.js` | Headless AI-vs-AI regression run |
-| `docs/` | Rules audit and assignment reports |
+| `docs/` | Rules audit, state model / save format, assignment reports |
 
 ---
 

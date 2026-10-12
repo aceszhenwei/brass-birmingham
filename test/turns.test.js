@@ -63,7 +63,6 @@ test('Canal Era end: scores, removes canal links and Level I tiles, resets beer,
     placeLink(state, 'birmingham-coventry', 0);
     for (const mt of state.merchantTiles) mt.hasBeer = false;
     state.players[1].hand.push({ type: 'wildLocation', name: 'Wild Location' });
-    state.players[1].hasWildLocation = true;
     state.wildLocationPile = 3;
 
     state.endCanalEra();

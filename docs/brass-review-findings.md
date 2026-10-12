@@ -1,6 +1,6 @@
 # Brass: Birmingham — Rules Audit & Architecture Review
 
-Original audit of commit `2c1fe1f`. **Status after Assignment 1** is summarised below; details of each fix are in [`assignment-1-report.md`](assignment-1-report.md).
+Original audit of commit `2c1fe1f`. **Status after Assignments 1–2** is summarised below; details are in [`assignment-1-report.md`](assignment-1-report.md) and [`assignment-2-report.md`](assignment-2-report.md).
 
 | Finding | Status |
 |---|---|
@@ -12,7 +12,7 @@ Original audit of commit `2c1fe1f`. **Status after Assignment 1** is summarised 
 | A6 Develop/second-rail affordability, AI hand visible | **Fixed** |
 | B Missing player choices | Open — deferred to the player-choice work (only rail-coal ties are exposed, via `getRailCoalOptions`) |
 | C7 Tile data vs rulebook illustration | **Resolved, no change** — the bundled retail player mat and tile art match `gameData.js` |
-| D Engine refactor | Deferred to a later assignment |
+| D Engine refactor | **Partly done in Assignment 2:** seeded RNG, clone and serialize/restore ([`state-model.md`](state-model.md), [`assignment-2-report.md`](assignment-2-report.md)). Still to do: the unified legal-move API, turn flow in the engine, and player choices |
 
 ## How this was checked
 

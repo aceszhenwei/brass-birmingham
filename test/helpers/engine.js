@@ -6,8 +6,12 @@
 //   const E = loadEngine({ seed: 42 });
 //   const { GameState, GameLogic, INDUSTRY_TYPES } = E;
 //
-// `seed` replaces Math.random inside the context with a deterministic PRNG so
-// shuffles (deck, merchants, turn order) and AI noise are reproducible.
+// All gameplay randomness goes through the engine's SeededRandom (pass
+// { seed } to GameState). To prove nothing bypasses it, Math.random THROWS
+// inside the context unless `allowMathRandom` is set. `crypto` is provided so
+// a GameState created without a seed can still pick a random one.
+// (The legacy `seed` option seeds Math.random instead; it exists only to
+// replay Assignment 1 harness games and implies allowMathRandom.)
 
 'use strict';
 
@@ -17,7 +21,7 @@ const vm = require('node:vm');
 
 const JS_DIR = path.join(__dirname, '..', '..', 'js');
 
-const ENGINE_FILES = ['gameData.js', 'gameState.js', 'gameLogic.js', 'aiPlayer.js'];
+const ENGINE_FILES = ['gameData.js', 'random.js', 'gameState.js', 'gameLogic.js', 'aiPlayer.js'];
 
 // Small, fast, well-distributed 32-bit PRNG
 function mulberry32(seed) {
@@ -31,11 +35,15 @@ function mulberry32(seed) {
     };
 }
 
-function loadEngine({ seed = null, extraFiles = [], globals = {} } = {}) {
-    const context = vm.createContext({ console, ...globals });
+function loadEngine({ seed = null, allowMathRandom = false, extraFiles = [], globals = {} } = {}) {
+    const context = vm.createContext({ console, crypto: globalThis.crypto, ...globals });
     if (seed !== null) {
         context.__rng = mulberry32(seed);
         vm.runInContext('Math.random = __rng;', context);
+    } else if (!allowMathRandom) {
+        vm.runInContext(
+            "Math.random = () => { throw new Error('Math.random used: gameplay randomness must use SeededRandom'); };",
+            context);
     }
     for (const file of [...ENGINE_FILES, ...extraFiles]) {
         const filename = path.join(JS_DIR, file);

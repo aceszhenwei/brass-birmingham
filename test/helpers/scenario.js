@@ -6,10 +6,10 @@ const { loadEngine } = require('./engine');
 
 // A fresh game. Options: players (2-4), seed, ai (all seats AI).
 function newGame({ players = 3, seed = 1, ai = false, E = null } = {}) {
-    E = E || loadEngine({ seed });
+    E = E || loadEngine();
     const names = ['Alice', 'Bob', 'Carol', 'Dave'].slice(0, players);
     const aiConfig = names.map(() => ({ isAI: ai, difficulty: 'normal' }));
-    const state = new E.GameState(players, names, aiConfig);
+    const state = new E.GameState(players, names, aiConfig, { seed });
     const logic = new E.GameLogic(state);
     return { E, state, logic };
 }
