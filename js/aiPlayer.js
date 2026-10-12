@@ -9,11 +9,16 @@
 // hands, the deck order, face-down discards and the game's random generator
 // are not in it, and nothing the AI does can change the real game.
 //
-// Research baseline: chooseAction(..., options) with AIPlayer.LEGACY_A5
+// Overbuilding (Assignment 8): replacing one of the player's own tiles is
+// charged for the future value of the tile it replaces.
+//
+// Research baselines: chooseAction(..., options) with AIPlayer.LEGACY_A5
 // reproduces the AI exactly as audited in Assignment 5, including its two
 // known defects (Hard reads opponents' hands; the rounds-remaining estimate
-// is wrong for half of each era). It exists only so experiments can compare
-// against that baseline (docs/research/); the game never uses it.
+// is wrong for half of each era). AIPlayer.LEGACY_A6 reproduces the AI of
+// Assignments 6-7 (overbuilds scored as if the space were empty). They exist
+// only so experiments can compare against them (docs/research/); the game
+// never uses them.
 // ============================================================================
 
 const AIPlayer = (() => {
@@ -26,8 +31,9 @@ const AIPlayer = (() => {
     const FLEX_WEIGHT = 0.8;
 
     // Per-call options (see chooseAction)
-    const DEFAULT_OPTIONS = Object.freeze({ information: 'player', rounds: 'engine' });
-    const LEGACY_A5 = Object.freeze({ information: 'full', rounds: 'deck-estimate' });
+    const DEFAULT_OPTIONS = Object.freeze({ information: 'player', rounds: 'engine', loan: 'a6', overbuild: 'opportunity' });
+    const LEGACY_A5 = Object.freeze({ information: 'full', rounds: 'deck-estimate', overbuild: 'a6' });
+    const LEGACY_A6 = Object.freeze({ overbuild: 'a6' });
     let options = DEFAULT_OPTIONS;
 
     // ------------------------------------------------------------------
@@ -148,7 +154,48 @@ const AIPlayer = (() => {
             money: -cost.total,
         }) + resourceSelfSufficiency + networkExpansion;
 
+        // Overbuilding the player's own tile (options.overbuild):
+        //   'opportunity' (default since Assignment 8) subtract the future
+        //                 value of the tile it replaces
+        //   'a6'          score it exactly like a build on an empty space,
+        //                 ignoring the tile it replaces (up to Assignment 7)
+        //   research variants that were not adopted (Assignment 8):
+        //   'opportunity-unflipped'  the charge for unflipped tiles only
+        //   'no-unflipped'           never overbuild an own unflipped tile
+        const variant = options.overbuild;
+        if (variant !== 'a6') {
+            const existing = existingTile(state, cand);
+            if (existing && existing.playerId === playerId) {
+                if (variant === 'no-unflipped' && !existing.flipped) return -Infinity;
+                if (variant === 'opportunity' || (variant === 'opportunity-unflipped' && !existing.flipped)) {
+                    return score - replacedTileValue(state, logic, playerId, cand, existing);
+                }
+            }
+        }
         return score;
+    }
+
+    function existingTile(state, cand) {
+        return isBreweryFarm(cand.cityId) ? state.breweryFarmTiles[cand.cityId]
+            : state.boardIndustries[`${cand.cityId}_${cand.slotIndex}`];
+    }
+
+    // What keeping an own tile is worth, valued with the same terms the build
+    // score uses for a new tile (its cost is sunk and not counted). A flipped
+    // tile has already paid its income, so only the VP it would still score
+    // is at stake; an unflipped one keeps its chance to flip and its cubes.
+    function replacedTileValue(state, logic, playerId, cand, existing) {
+        const t = existing.tileData;
+        const ownsAdjacentLink = playerOwnsLinkTouching(state, playerId, cand.cityId);
+        if (existing.flipped) {
+            return vpEquivalent(state, { vp: t.vp + (ownsAdjacentLink ? t.linkVP * 0.5 : 0) });
+        }
+        const flipProb = estimateFlipProbability(state, logic, playerId, { industryType: existing.type, cityId: cand.cityId });
+        const isResourceType = existing.type === INDUSTRY_TYPES.COAL_MINE || existing.type === INDUSTRY_TYPES.IRON_WORKS;
+        return vpEquivalent(state, {
+            vp: t.vp * flipProb + (ownsAdjacentLink ? t.linkVP * flipProb * 0.5 : 0),
+            income: t.income * flipProb,
+        }) + (isResourceType ? 0.15 * (existing.resourceCubes || 0) : 0);
     }
 
     function bestBuild(state, logic, playerId) {
@@ -171,12 +218,23 @@ const AIPlayer = (() => {
         const cardIndex = pickCardIndex(logic, playerId, ACTIONS.BUILD, target, player);
         if (cardIndex === null) return null;
 
-        return {
+        const result = {
             action: ACTIONS.BUILD,
             pendingData: target,
             cardIndex,
             score: bestScore,
         };
+        // Research diagnostics: every build target's score, and the tile it
+        // would replace (options.explain)
+        if (options.explain) {
+            result.builds = targets.map(t => {
+                const e = existingTile(state, t);
+                return { cityId: t.cityId, slotIndex: t.slotIndex, industryType: t.industryType, level: t.tileData.level,
+                    cost: t.cost.total, score: scoreBuildCandidate(state, logic, playerId, t),
+                    replaces: e ? { own: e.playerId === playerId, level: e.tileData.level, flipped: e.flipped, cubes: e.resourceCubes || 0 } : null };
+            });
+        }
+        return result;
     }
 
     // ------------------------------------------------------------------
@@ -411,7 +469,7 @@ const AIPlayer = (() => {
     //   'never'         never borrow (a diagnostic ablation, not a candidate)
     function scoreLoanResult(state, logic, playerId) {
         if (!state.canTakeLoan(playerId)) return null;
-        const variant = options.loan || 'a6';
+        const variant = options.loan;
         if (variant === 'never') return null;
         const player = state.players[playerId];
         const incomeLevel = state.getIncomeLevel(playerId);
@@ -578,7 +636,8 @@ const AIPlayer = (() => {
     //   rounds:      'engine' (default) | 'deck-estimate' (Assignment 5 baseline)
     //   explain:     true adds `explain` (every candidate's score) to the decision
     //   loan:        loan-scoring variant (see scoreLoanResult; default 'a6')
-    // AIPlayer.LEGACY_A5 sets both to the Assignment 5 behaviour.
+    //   overbuild:   overbuild scoring (see scoreBuildCandidate; default 'opportunity')
+    // AIPlayer.LEGACY_A5 / LEGACY_A6 restore the AI of those assignments.
     function chooseAction(state, logic, playerId, difficulty = 'normal', rng = null, opts = null) {
         const previous = options;
         options = opts ? { ...DEFAULT_OPTIONS, ...opts } : DEFAULT_OPTIONS;
@@ -627,7 +686,7 @@ const AIPlayer = (() => {
             return { action: ACTIONS.PASS, pendingData: {}, cardIndex: 0 };
         }
 
-        const unperturbed = options.explain ? results.map(r => ({ action: r.action, score: r.score, parts: r.parts })) : null;
+        const unperturbed = options.explain ? results.map(r => ({ action: r.action, score: r.score, parts: r.parts, builds: r.builds })) : null;
         const forced = applyDifficulty(state, logic, playerId, results, difficulty, random);
         results.sort((a, b) => b.score - a.score);
         const chosen = forced || results[0];
@@ -639,7 +698,7 @@ const AIPlayer = (() => {
         return chosen;
     }
 
-    return { chooseAction, LEGACY_A5, roundsRemaining: (state, opts = null) => {
+    return { chooseAction, LEGACY_A5, LEGACY_A6, roundsRemaining: (state, opts = null) => {
         const previous = options;
         options = opts ? { ...DEFAULT_OPTIONS, ...opts } : DEFAULT_OPTIONS;
         try { return estimateRoundsRemaining(state); } finally { options = previous; }

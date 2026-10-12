@@ -275,6 +275,10 @@ The order follows the evidence:
 Everything is deterministic with Node.js 22+ and no dependencies. Raw results
 go to the git-ignored `research-a6/` folder. Times are for one core.
 
+Since Assignment 8 changed the production AI, the corrected AI of this report
+is `<level>~a6` (`AIPlayer.LEGACY_A6`). The commands below use those names
+and reproduce this report's numbers exactly.
+
 ```
 # Matchups: corrections in isolation and together vs the baseline, then the corrected ladder
 # (default pairs; about 6 / 9 / 11 min)
@@ -283,14 +287,14 @@ node scripts/research/ai-baseline.js matchups --players 3 --seeds 40 --out resea
 node scripts/research/ai-baseline.js matchups --players 4 --seeds 40 --out research-a6/matchups-4.json
 
 # Which correction removed Hard's edge (about 10 min each)
-P=normal-a5:hard-a5,normal-a5:hard-fairinfo,normal-a5:hard-rounds,normal:hard
+P=normal-a5:hard-a5,normal-a5:hard-fairinfo,normal-a5:hard-rounds,normal~a6:hard~a6
 node scripts/research/ai-baseline.js matchups --players 3 --seeds 80 --pairs $P --out research-a6/hardgap-3.json
 node scripts/research/ai-baseline.js matchups --players 4 --seeds 80 --pairs $P --out research-a6/hardgap-4.json
 
-node scripts/research/ai-baseline.js threeway --players 3 --seeds 50 --out research-a6/threeway-3.json
+node scripts/research/ai-baseline.js threeway --players 3 --seeds 50 --levels easy~a6,normal~a6,hard~a6 --out research-a6/threeway-3.json
 
 # Mirror games for the paired behaviour comparison (about 4-5 min per player count)
-L=easy,normal,hard,easy-a5,normal-a5,hard-a5,easy-rounds,normal-rounds,hard-rounds,hard-fairinfo
+L=easy~a6,normal~a6,hard~a6,easy-a5,normal-a5,hard-a5,easy-rounds,normal-rounds,hard-rounds,hard-fairinfo
 node scripts/research/ai-baseline.js mirror --players 2 --seeds 100 --levels $L --out research-a6/mirror-2.json   # and 3, 4
 
 # Tables
@@ -298,8 +302,8 @@ node scripts/research/ai-report.js research-a6/matchups-*.json research-a6/three
 node scripts/research/ai-compare.js research-a6/mirror-*.json
 
 # Probes: legality, hidden information, decision sensitivity; decision-level behaviour
-node scripts/research/ai-audit.js --games 10
-node scripts/research/ai-probes.js --players 3 --seeds 100 --levels easy,normal,hard   # and 2, 4
+node scripts/research/ai-audit.js --games 10 --baseline a6
+node scripts/research/ai-probes.js --players 3 --seeds 100 --levels easy~a6,normal~a6,hard~a6   # and 2, 4
 ```
 
 `scripts/research/ai-compare.js` (new) produces the paired before/after

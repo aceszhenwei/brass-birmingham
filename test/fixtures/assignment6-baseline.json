@@ -1,5 +1,5 @@
 {
- "generatedFrom": "production AI after Assignment 6 (loan heuristic kept in Assignment 7)",
+ "generatedFrom": "the AI of Assignments 6-7 (AIPlayer.LEGACY_A6; production until Assignment 8)",
  "scheme": "seed 6000+1000*players+i, difficulty easy/normal/hard by seed, each AI with its own seeded stream",
  "games": {
   "2": [
