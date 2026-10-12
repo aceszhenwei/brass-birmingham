@@ -3,8 +3,10 @@
 // Overbuild scoring (Assignment 8). Production charges an overbuild of the
 // player's own tile for the replaced tile's future value ('opportunity');
 // 'a6' (AIPlayer.LEGACY_A6) is the previous scoring. The variants change only
-// how a Build replacing the player's own tile is scored. The production AI is
-// pinned by recorded games (test/fixtures/assignment8-baseline.json).
+// how a Build replacing the player's own tile is scored. The Assignment 8 AI
+// (AIPlayer.LEGACY_A8) is pinned by recorded games
+// (test/fixtures/assignment8-baseline.json); the production AI since
+// Assignment 9 by test/ai-invest.test.js.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -62,9 +64,9 @@ test('the variants re-score only overbuilds of the player\'s own tiles, in the i
 });
 
 for (const players of [2, 3, 4]) {
-    test(`${players} players: the production AI replays the recorded Assignment 8 games exactly`, () => {
+    test(`${players} players: the Assignment 8 AI (LEGACY_A8) replays its recorded games exactly`, () => {
         for (const g of baseline.games[players]) {
-            const r = playGame({ players, seed: g.seed, difficulty: g.difficulty, E });
+            const r = playGame({ players, seed: g.seed, difficulty: g.difficulty, aiOptions: E.AIPlayer.LEGACY_A8, E });
             assert.equal(fingerprint(r.state, { steps: r.steps, actions: r.actions }), g.fingerprint,
                 `seed ${g.seed} (${g.difficulty}) no longer plays as recorded`);
         }
@@ -79,7 +81,7 @@ test("the default overbuild scoring is 'opportunity', LEGACY_A6 is 'a6', and bui
         const key = (opts) => JSON.stringify(logic.moveFromDecision(
             E.AIPlayer.chooseAction(state, logic, d.playerId, 'hard', aiRng.clone(), opts)));
         assert.equal(key({ overbuild: 'opportunity' }), key(null));
-        assert.equal(key(E.AIPlayer.LEGACY_A6), key({ overbuild: 'a6' }));
+        assert.equal(key(E.AIPlayer.LEGACY_A6), key({ overbuild: 'a6', sell: 'a8' }));
         assert.equal(key({ explain: true }), key(null));
         assert.ok(logic.play(d.playerId, logic.moveFromDecision(E.AIPlayer.chooseAction(state, logic, d.playerId, 'hard', aiRng))).success);
     }
