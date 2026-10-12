@@ -13,7 +13,8 @@ record the limitations as they stood at each stage.
 ## AI
 
 - **The AI is heuristic** (Easy / Normal / Hard), inherited from upstream and unchanged by this fork apart from bug fixes.
-- **The Hard AI reads opponents' hands.** It does not respect hidden information. A future AI should observe `state.getPlayerView(id)` instead.
+- **The Hard AI reads opponents' hands.** It does not respect hidden information. A future AI should observe `state.getPlayerView(id)` instead. Measured, the leak gives no detectable strength ([AI audit, F1](research/ai-baseline-audit.md#22-confirmed-hard-reads-opponents-hands-f1)).
+- **The AI is weak and its levels are close together.** It scores 34–44 VP per player. Easy is only modestly weaker than Normal, and Normal and Hard are equal at 2 players. The [AI audit](research/ai-baseline-audit.md) lists the confirmed defects behind this (a wrong rounds-remaining estimate, a loan spiral, overbuilding its own tiles, over-development) and a plan to fix them.
 
 ## Engine
 

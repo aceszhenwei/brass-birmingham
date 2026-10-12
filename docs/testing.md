@@ -30,6 +30,7 @@ so any gameplay code that bypasses the game's seeded generator fails the suite.
 | `ui-choices.test.js` | The UI's choice dialogs and engine-driven flow, with a DOM stub |
 | `progression.test.js` | Engine-controlled progression, saves at every lifecycle boundary |
 | `ai-simulation.test.js` | Complete AI-vs-AI and random legal-move games |
+| `ai-audit.test.js` | AI fairness: choosing never changes the state, no dependence on the deck order, and Easy and Normal ignore opponents' hands. Hard's hand reading is a `todo` test (a known defect) |
 
 `BRASS_SIM_GAMES=100 node --test test/*.test.js` raises the number of
 complete games the suite plays per player count (default 10).
@@ -70,6 +71,20 @@ reported as a problem if:
 The script prints a summary per player count, lists every problem, and exits
 with a non-zero code if there are any. `--first` shifts the AI game seeds, so
 a later run can cover new games, for example `--first 101 --no-a1`.
+
+## AI research scripts
+
+`scripts/research/` holds the reproducible experiments behind the
+[AI baseline audit](research/ai-baseline-audit.md):
+- seat-balanced matchups between difficulty levels;
+- mirror-game statistics;
+- a hidden-information and legality probe;
+- decision probes;
+- game traces.
+
+They are not part of CI. The audit's *Reproducing the experiments* section
+lists the commands, and the raw results go to the git-ignored
+`research-results/` folder.
 
 ## Continuous integration
 

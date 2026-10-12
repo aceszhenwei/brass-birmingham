@@ -10,6 +10,7 @@ progress.md
 # Test and simulation output
 coverage/
 simulation.log
+research-results/
 *.log
 
 # Editors and operating systems
