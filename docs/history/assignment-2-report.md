@@ -14,7 +14,7 @@ Out of scope:
 
 `index.html` still opens directly from disk with no build step and no
 dependencies. The state model and save format are documented in
-[`state-model.md`](state-model.md).
+[`state-model.md`](../state-model.md).
 
 ## 1. What was implemented
 

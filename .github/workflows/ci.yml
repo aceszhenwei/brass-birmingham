@@ -1,0 +1,47 @@
+# Tests and smoke checks for every pull request and every push to main.
+# No dependencies: the suite runs on Node's built-in test runner.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Run the test suite
+        run: node --test --test-reporter=spec test/*.test.js
+
+  smoke:
+    name: Smoke checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check index.html references and Markdown links
+        run: node scripts/check-repo.js
+      - name: Headless simulation (small, deterministic)
+        run: node scripts/simulate.js --games 3 --mixed 1 --random 1

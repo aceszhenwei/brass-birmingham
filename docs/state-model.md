@@ -52,7 +52,7 @@ captured by `serialize()` and restored by `GameState.deserialize()`.
 
 No game rule changed. With equivalent random draws, the engine replays all
 300 recorded Assignment 1 games bit-for-bit (see
-[`assignment-2-report.md`](assignment-2-report.md)).
+[`assignment-2-report.md`](history/assignment-2-report.md)).
 
 ## Randomness
 
