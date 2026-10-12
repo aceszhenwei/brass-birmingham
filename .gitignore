@@ -11,6 +11,7 @@ progress.md
 coverage/
 simulation.log
 research-results/
+research-a6/
 *.log
 
 # Editors and operating systems

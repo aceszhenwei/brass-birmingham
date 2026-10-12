@@ -25,12 +25,13 @@ so any gameplay code that bypasses the game's seeded generator fails the suite.
 | `turns.test.js` | Turn progression, turn order, round counts, era transitions |
 | `scoring.test.js` | Income shortfalls, era scoring, the end of the game |
 | `regressions.test.js` | The defects confirmed in the [rules audit](history/brass-review-findings.md) |
-| `determinism.test.js`, `clone.test.js`, `serialization.test.js` | Seeded randomness, cloning, saves |
+| `determinism.test.js`, `clone.test.js`, `serialization.test.js` | Seeded randomness, cloning, saves. Includes the bit-for-bit replay of the Assignment 1 games by the legacy AI baseline (`AIPlayer.LEGACY_A5`) |
 | `legal-moves.test.js`, `choices.test.js` | Legal-move soundness and completeness, player choices, fuzzed moves |
 | `ui-choices.test.js` | The UI's choice dialogs and engine-driven flow, with a DOM stub |
 | `progression.test.js` | Engine-controlled progression, saves at every lifecycle boundary |
 | `ai-simulation.test.js` | Complete AI-vs-AI and random legal-move games |
-| `ai-audit.test.js` | AI fairness: choosing never changes the state, no dependence on the deck order, and Easy and Normal ignore opponents' hands. Hard's hand reading is a `todo` test (a known defect) |
+| `ai-fairness.test.js` | AI information fairness. At every decision of complete games, every difficulty decides the same in an "alternate world" the player cannot tell apart: other hands, deck order, face-down cards and the game RNG are all changed. Choosing never changes the state, and observations match the player view. The legacy baseline's Hard leak is still detected |
+| `ai-rounds.test.js` | `getRoundsRemaining` matches the round ends actually still to come at every decision of complete 2–4 player games, in both eras and across the era transition. The AI uses it, and the legacy baseline keeps the old estimate |
 
 `BRASS_SIM_GAMES=100 node --test test/*.test.js` raises the number of
 complete games the suite plays per player count (default 10).
@@ -55,7 +56,7 @@ node scripts/simulate.js [--games 100] [--players 2,3,4] [--first 1] [--no-a1] [
 
 For each player count, the script plays:
 
-- **`--games` AI games** (seeds `1000 × players + i`), with the difficulty rotating easy, normal and hard by seed. Every game is cloned and saved to JSON part-way through, and the original, the clone and the restored save must finish identically. Unless `--no-a1` is given, each game with a recorded counterpart (seeds 1–100) is also compared with the Assignment 1 baseline.
+- **`--games` AI games** (seeds `1000 × players + i`), with the difficulty rotating easy, normal and hard by seed. Every game is cloned and saved to JSON part-way through, and the original, the clone and the restored save must finish identically. Unless `--no-a1` is given, the legacy AI baseline (`AIPlayer.LEGACY_A5`) replays each game that has a recorded counterpart (seeds 1–100), and the result is compared with the Assignment 1 baseline.
 - **`--mixed` games** with a different difficulty at each seat (easy, normal, hard, normal).
 - **`--random` games** choosing at random among every legal move, with all choices expanded and random income-shortfall decisions.
 

@@ -49,7 +49,7 @@ function noteEvents(summary, events) {
 // summary.steps / summary.actions count turn actions only (as in earlier
 // assignments); summary.shortfalls counts shortfall decisions.
 function playActions(E, state, logic, {
-    aiRng = null, difficulty = null, chooseAction = null, shortfallPolicy = null, replay = null,
+    aiRng = null, difficulty = null, chooseAction = null, aiOptions = null, shortfallPolicy = null, replay = null,
     record = null, maxActions = Infinity, maxSteps = 5000, checkEveryStep = true, summary = null, label = '',
 } = {}) {
     summary = summary || { steps: 0, actions: {}, canalRounds: null, railRounds: null };
@@ -68,7 +68,7 @@ function playActions(E, state, logic, {
             try {
                 // Each seat plays at its own difficulty (as in the UI) unless overridden
                 const level = difficulty || state.players[d.playerId].aiDifficulty;
-                move = logic.moveFromDecision((chooseAction || E.AIPlayer.chooseAction)(state, logic, d.playerId, level, aiRng));
+                move = logic.moveFromDecision((chooseAction || E.AIPlayer.chooseAction)(state, logic, d.playerId, level, aiRng, aiOptions));
             } catch (err) {
                 throw new AIActionError(`AI threw while choosing (${where}): ${err.stack || err}`);
             }
@@ -104,14 +104,16 @@ function playActions(E, state, logic, {
 // options.sharedRng makes the AI draw from the GAME's generator, which
 // reproduces the single-stream randomness of the Assignment 1 harness (used
 // only to compare behaviour against Assignment 1).
+// options.aiOptions is passed to AIPlayer.chooseAction (e.g. AIPlayer.LEGACY_A5,
+// the AI as it was up to Assignment 5, which the recorded games come from).
 function playGame({ players = 3, seed = 1, difficulty = 'normal', maxSteps = 5000, checkEveryStep = true,
-    chooseAction = null, sharedRng = false, record = null, E = null } = {}) {
+    chooseAction = null, aiOptions = null, sharedRng = false, record = null, E = null } = {}) {
     E = E || loadEngine();
     const { state, logic } = createGame(E, { players, seed, difficulty });
     const aiRng = sharedRng ? state.rng : new E.SeededRandom(aiSeedFor(seed));
     const summary = { players, seed, steps: 0, actions: {}, canalRounds: null, railRounds: null };
     playActions(E, state, logic, {
-        aiRng, chooseAction, record, maxSteps, checkEveryStep, summary, label: `(seed ${seed})`,
+        aiRng, chooseAction, aiOptions, record, maxSteps, checkEveryStep, summary, label: `(seed ${seed})`,
     });
     summary.vp = state.players.map(p => p.vp);
     summary.money = state.players.map(p => p.money);

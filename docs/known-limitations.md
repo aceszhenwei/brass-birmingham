@@ -13,8 +13,8 @@ record the limitations as they stood at each stage.
 ## AI
 
 - **The AI is heuristic** (Easy / Normal / Hard), inherited from upstream and unchanged by this fork apart from bug fixes.
-- **The Hard AI reads opponents' hands.** It does not respect hidden information. A future AI should observe `state.getPlayerView(id)` instead. Measured, the leak gives no detectable strength ([AI audit, F1](research/ai-baseline-audit.md#22-confirmed-hard-reads-opponents-hands-f1)).
-- **The AI is weak and its levels are close together.** It scores 34–44 VP per player. Easy is only modestly weaker than Normal, and Normal and Hard are equal at 2 players. The [AI audit](research/ai-baseline-audit.md) lists the confirmed defects behind this (a wrong rounds-remaining estimate, a loan spiral, overbuilding its own tiles, over-development) and a plan to fix them.
+- **Fair information (since Assignment 6).** Every difficulty decides on the player's observation, so no AI sees opponents' hands, the deck order or the game RNG ([AI corrections](research/ai-corrections-a6.md)). The research baseline `AIPlayer.LEGACY_A5` keeps the old Hard leak on purpose and is not a fair benchmark.
+- **The AI is still weak, and its levels are close together.** The [AI audit](research/ai-baseline-audit.md) and the [Assignment 6 report](research/ai-corrections-a6.md) give the measurements. The remaining confirmed defects (the loan logic, overbuild scoring, over-development, careless discards) are scheduled for later work.
 
 ## Engine
 

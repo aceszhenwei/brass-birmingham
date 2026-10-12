@@ -1338,6 +1338,35 @@ class GameState {
         if (errors.length) throw new GameStateError(`Invalid saved game: ${errors.join('; ')}`);
     }
 
+    // Rounds left in the current era, counting the round in progress: the
+    // first round of an era reports ROUNDS_PER_ERA (10 / 9 / 8 at 2 / 3 / 4
+    // players) and the last reports 1. 0 once the era's cards are all played
+    // (scoring is due, possibly after a pending shortfall) or the game is over.
+    getRoundsRemaining() {
+        if (this.gameOver || this.isEraOver()) return 0;
+        return Math.max(1, ROUNDS_PER_ERA[this.numPlayers] - this.round + 1);
+    }
+
+    // A playable copy of the game holding only what `viewerId` may know: the
+    // same information as getPlayerView(viewerId), as a GameState that rules
+    // queries can run on. Other players' hands, the draw deck and face-down
+    // discards become placeholder cards (counts kept, contents and order
+    // gone), and the random generator is replaced by a fixed one, so the copy
+    // cannot reveal future shuffles. Two games that differ only in what the
+    // viewer cannot see give identical observations. Changes to the copy never
+    // affect this game.
+    getObservation(viewerId) {
+        const obs = this.clone();
+        const hidden = (c) => (c && c.faceDown ? { type: 'hidden', faceDown: true } : { type: 'hidden' });
+        obs.drawDeck = obs.drawDeck.map(hidden);
+        for (const p of obs.players) {
+            if (p.id !== viewerId) p.hand = p.hand.map(hidden);
+            p.discardPile = p.discardPile.map(c => (c.faceDown ? hidden(c) : c));
+        }
+        obs.rng = new SeededRandom(0);
+        return obs;
+    }
+
     // What one player may see (viewerId), or what everyone may see (null):
     // other players' hands, the draw deck, face-down discards and the random
     // generator are reduced to counts / placeholders. Not restorable.

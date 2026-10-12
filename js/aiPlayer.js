@@ -1,9 +1,19 @@
 // ============================================================================
 // Brass: Birmingham - AI Opponent
 // ============================================================================
-// Stateless decision engine. Reads GameState/GameLogic (never mutates them)
-// and returns a decision shaped to drop directly into UIManager's existing
-// action pipeline: { action, pendingData, cardIndex }.
+// Stateless decision engine. Returns a decision shaped to drop directly into
+// UIManager's existing action pipeline: { action, pendingData, cardIndex }.
+//
+// Information (Assignment 6): the AI decides on state.getObservation(playerId),
+// a copy of the game holding only what that player may know. Opponents'
+// hands, the deck order, face-down discards and the game's random generator
+// are not in it, and nothing the AI does can change the real game.
+//
+// Research baseline: chooseAction(..., options) with AIPlayer.LEGACY_A5
+// reproduces the AI exactly as audited in Assignment 5, including its two
+// known defects (Hard reads opponents' hands; the rounds-remaining estimate
+// is wrong for half of each era). It exists only so experiments can compare
+// against that baseline (docs/research/); the game never uses it.
 // ============================================================================
 
 const AIPlayer = (() => {
@@ -15,13 +25,25 @@ const AIPlayer = (() => {
     const BASE_INCOME_WEIGHT = 0.35;
     const FLEX_WEIGHT = 0.8;
 
+    // Per-call options (see chooseAction)
+    const DEFAULT_OPTIONS = Object.freeze({ information: 'player', rounds: 'engine' });
+    const LEGACY_A5 = Object.freeze({ information: 'full', rounds: 'deck-estimate' });
+    let options = DEFAULT_OPTIONS;
+
     // ------------------------------------------------------------------
     // Shared helpers
     // ------------------------------------------------------------------
 
+    // Rounds left in the era, counting the current one. The engine knows this
+    // exactly. (The Assignment 5 baseline used drawDeck.length / numPlayers,
+    // which ignores the cards in hand and counts one card per round instead
+    // of two: once the deck runs out it reads 1 while up to 4 rounds remain.)
     function estimateRoundsRemaining(state) {
-        const proxy = state.drawDeck.length / state.numPlayers;
-        return Math.max(1, Math.min(10, proxy));
+        if (options.rounds === 'deck-estimate') {
+            const proxy = state.drawDeck.length / state.numPlayers;
+            return Math.max(1, Math.min(10, proxy));
+        }
+        return Math.max(1, state.getRoundsRemaining());
     }
 
     function incomeWeight(state) {
@@ -434,17 +456,60 @@ const AIPlayer = (() => {
         return null;
     }
 
+    // Hard's bonus for building where opponents could build too: 0.6 per
+    // opponent location card naming the town, 0.3 per opponent industry card
+    // showing the industry. Opponents' hands are hidden, so the bonus uses
+    // the EXPECTED number of such cards given what this player can see.
     function denialBonus(state, playerId, decision) {
         const { cityId, industryType } = decision.pendingData;
-        let bonus = 0;
-        for (const p of state.players) {
-            if (p.id === playerId) continue;
-            for (const card of p.hand) {
-                if (card.type === CARD_TYPES.LOCATION && card.location === cityId) bonus += 0.6;
-                if (card.type === CARD_TYPES.INDUSTRY && card.industryTypes.includes(industryType)) bonus += 0.3;
+        if (options.information === 'full') {
+            // Assignment 5 baseline: reads the opponents' actual hands
+            let bonus = 0;
+            for (const p of state.players) {
+                if (p.id === playerId) continue;
+                for (const card of p.hand) {
+                    if (card.type === CARD_TYPES.LOCATION && card.location === cityId) bonus += 0.6;
+                    if (card.type === CARD_TYPES.INDUSTRY && card.industryTypes.includes(industryType)) bonus += 0.3;
+                }
+            }
+            return bonus;
+        }
+        const { locations, industries } = expectedOpponentCards(state, playerId, cityId, industryType);
+        return 0.6 * locations + 0.3 * industries;
+    }
+
+    // Expected number of location cards for `cityId` and industry cards
+    // showing `industryType` in all opponents' hands together. The cards this
+    // player cannot see are the era's deck minus every card it can see (its
+    // own hand and the face-up discards); each is equally likely to be any of
+    // the hidden cards, of which the opponents hold their hand counts.
+    function expectedOpponentCards(state, playerId, cityId, industryType) {
+        const deck = CARD_DECK[state.numPlayers];
+        const showsIndustry = (types) => types.includes(industryType);
+        let total = 0;
+        let loc = deck.locations[cityId] || 0;
+        let ind = deck.industries[industryType] || 0;
+        for (const n of Object.values(deck.locations)) total += n;
+        for (const n of Object.values(deck.industries)) total += n;
+        const dual = deck.dualCottonManufacturer || 0;
+        total += dual;
+        if (showsIndustry([INDUSTRY_TYPES.COTTON_MILL, INDUSTRY_TYPES.MANUFACTURER])) ind += dual;
+
+        const visible = [...state.players[playerId].hand, ...state.players.flatMap(p => p.discardPile)];
+        let unseen = total;
+        for (const card of visible) {
+            if (card.type === CARD_TYPES.LOCATION) {
+                unseen--;
+                if (card.location === cityId) loc--;
+            } else if (card.type === CARD_TYPES.INDUSTRY) {
+                unseen--;
+                if (showsIndustry(card.industryTypes)) ind--;
             }
         }
-        return bonus;
+        const opponentCards = state.players.reduce((n, p) => n + (p.id === playerId ? 0 : p.hand.length), 0);
+        if (unseen <= 0) return { locations: 0, industries: 0 };
+        const share = Math.min(1, opponentCards / unseen);
+        return { locations: Math.max(0, loc) * share, industries: Math.max(0, ind) * share };
     }
 
     // ------------------------------------------------------------------
@@ -455,7 +520,26 @@ const AIPlayer = (() => {
     // reproducible. It is deliberately separate from the game's own
     // generator: the AI thinking must not change future deck shuffles.
     // Without one, Math.random is used (unseeded, as before).
-    function chooseAction(state, logic, playerId, difficulty = 'normal', rng = null) {
+    // opts (research only; the game passes none):
+    //   information: 'player' (default) decides on the player's observation;
+    //                'full' decides on the real state (Assignment 5 baseline)
+    //   rounds:      'engine' (default) | 'deck-estimate' (Assignment 5 baseline)
+    // AIPlayer.LEGACY_A5 sets both to the Assignment 5 behaviour.
+    function chooseAction(state, logic, playerId, difficulty = 'normal', rng = null, opts = null) {
+        const previous = options;
+        options = opts ? { ...DEFAULT_OPTIONS, ...opts } : DEFAULT_OPTIONS;
+        try {
+            if (options.information === 'player') {
+                state = state.getObservation(playerId);
+                logic = new GameLogic(state);
+            }
+            return decide(state, logic, playerId, difficulty, rng);
+        } finally {
+            options = previous;
+        }
+    }
+
+    function decide(state, logic, playerId, difficulty, rng) {
         const random = rng ? () => rng.next() : Math.random;
         const results = [];
 
@@ -496,5 +580,9 @@ const AIPlayer = (() => {
         return results[0];
     }
 
-    return { chooseAction };
+    return { chooseAction, LEGACY_A5, roundsRemaining: (state, opts = null) => {
+        const previous = options;
+        options = opts ? { ...DEFAULT_OPTIONS, ...opts } : DEFAULT_OPTIONS;
+        try { return estimateRoundsRemaining(state); } finally { options = previous; }
+    } };
 })();

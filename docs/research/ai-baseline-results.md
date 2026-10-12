@@ -2,6 +2,8 @@
 
 Generated output of the research scripts, used by [the audit report](ai-baseline-audit.md). Every number can be regenerated with the commands in the report's [Reproducing the experiments](ai-baseline-audit.md#reproducing-the-experiments) section; the raw per-game data is not committed.
 
+In these tables `easy`, `normal` and `hard` are the AI as it was in Assignment 5, preserved since Assignment 6 as the `-a5` baseline. Its Hard reads opponents' hands.
+
 Contents: 1 experiments (pairwise matchups, three-way games, mirror-game statistics), 2 legality and fairness probe, 3 decision probes.
 
 # 1. Experiments

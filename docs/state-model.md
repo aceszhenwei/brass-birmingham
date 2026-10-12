@@ -138,6 +138,13 @@ There are two player-facing views:
   - the random-generator state removed.
 
   `viewerId = null` gives a spectator view. A player view has a different `format` and cannot be loaded as a save.
+- **`state.getObservation(viewerId)`.** Added in Assignment 6. It holds the same information as the player view, but as a playable `GameState` copy, so rules queries can run on it.
+  - Other players' hands, the draw deck and face-down discards become `{ type: 'hidden' }` placeholders. Counts are kept; contents and order are not.
+  - The random generator is replaced by a fixed one, so future shuffles can't be predicted.
+  - Two games that differ only in what the viewer can't see give identical observations.
+  - Changing the copy never affects the game.
+
+  The AI decides on this observation (see [`research/ai-corrections-a6.md`](research/ai-corrections-a6.md)).
 
 The debugging globals that `main.js` already exposes (`window.gameState` and
 the others) can of course reach everything. They are a developer convenience,

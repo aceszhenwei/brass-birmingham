@@ -1,5 +1,12 @@
 # Assignment 5: Audit and Baseline of the Existing AI
 
+> **Status after Assignment 6.**
+> - **F1 and D2 are fixed:** Hard no longer reads opponents' hands, and the rounds-remaining estimate is exact. See [`ai-corrections-a6.md`](ai-corrections-a6.md).
+> - **The AI audited here is preserved** as the research baseline `AIPlayer.LEGACY_A5`, the `-a5` policies in `scripts/research/`. It reproduces every number in this report exactly.
+> - **The baseline keeps both defects.** Its Hard reads hidden hands, so do not use it as a fair competitive benchmark.
+>
+> The rest of this report is unchanged, apart from the commands, which now name the `-a5` policies.
+
 **Scope.** This is an investigation of the computer opponents in
 `js/aiPlayer.js` as they stand after Assignment 4.5. The AI was not changed.
 The research scripts in `scripts/research/` call the AI exactly as the game
@@ -312,7 +319,7 @@ discarded. An overbuilt unflipped tile never scores.
 - At 3 players, Normal: 249 unflipped own tiles were overbuilt in 300 player-games, after £3,353 had been spent on them, destroying 478 resource cubes.
 
 **Trace.** Seed 203001, 3 players, all Normal, player 0
-(`node scripts/research/ai-trace.js --players 3 --seed 203001 --seats normal,normal,normal --player 0`):
+(`node scripts/research/ai-trace.js --players 3 --seed 203001 --seats normal-a5,normal-a5,normal-a5 --player 0`):
 
 ```
 canal r 6  P0 normal £  8 inc   0 vp   0  build    {"card":7,"location":"birmingham","slot":2,"industry":"ironWorks","coal":["market"]}
@@ -471,27 +478,32 @@ so fixing them together would hide which change helped.
 Everything is deterministic, with no dependencies (Node.js 22+). Raw results
 go to `research-results/`, which git ignores. Times are for one core.
 
+Since Assignment 6 the plain policy names (`easy`, `normal`, `hard`) are the
+corrected AI. The commands below use the preserved baseline (`-a5`) and
+reproduce this report's results exactly. `hard-blind` and `hard-fair` are
+ablations of the baseline Hard.
+
 ```
 # Legality, purity and hidden-information probe (§2; about 2 min)
-node scripts/research/ai-audit.js --games 10
+node scripts/research/ai-audit.js --games 10 --baseline a5
 
 # Strength experiments (§3; about 3 + 6 + 7 min; run them in parallel)
-P=easy:normal,normal:hard,easy:hard,hard-blind:hard,hard-fair:hard,hard-blind:normal
+P=easy-a5:normal-a5,normal-a5:hard-a5,easy-a5:hard-a5,hard-blind:hard-a5,hard-fair:hard-a5,hard-blind:normal-a5
 node scripts/research/ai-baseline.js matchups --players 2 --seeds 100 --pairs $P
 node scripts/research/ai-baseline.js matchups --players 3 --seeds 40 --pairs $P
 node scripts/research/ai-baseline.js matchups --players 4 --seeds 40 --pairs $P
-node scripts/research/ai-baseline.js matchups --players 2,3,4 --seeds 10 --pairs random:easy --out research-results/random-floor.json
-node scripts/research/ai-baseline.js threeway --players 3 --seeds 50
-node scripts/research/ai-baseline.js mirror --players 2 --seeds 100     # and --players 3, 4
+node scripts/research/ai-baseline.js matchups --players 2,3,4 --seeds 10 --pairs random:easy-a5 --out research-results/random-floor.json
+node scripts/research/ai-baseline.js threeway --players 3 --seeds 50 --levels easy-a5,normal-a5,hard-a5
+node scripts/research/ai-baseline.js mirror --players 2 --seeds 100 --levels easy-a5,normal-a5,hard-a5     # and --players 3, 4
 
 # Tables (results §1)
 node scripts/research/ai-report.js research-results/*.json
 
 # Decision probes (§4; about 1 min each)
-node scripts/research/ai-probes.js --players 3 --seeds 100           # and 2, 4
+node scripts/research/ai-probes.js --players 3 --seeds 100 --levels easy-a5,normal-a5,hard-a5    # and 2, 4
 
 # A readable trace of any game
-node scripts/research/ai-trace.js --players 3 --seed 203001 --seats normal,normal,normal --player 0
+node scripts/research/ai-trace.js --players 3 --seed 203001 --seats normal-a5,normal-a5,normal-a5 --player 0
 ```
 
 | File | Purpose |
@@ -502,4 +514,4 @@ node scripts/research/ai-trace.js --players 3 --seed 203001 --seats normal,norma
 | `scripts/research/ai-audit.js` | Legality, purity, hidden-information and decision-coverage probe |
 | `scripts/research/ai-probes.js` | Loans, selling, development, spending and overbuild probes |
 | `scripts/research/ai-trace.js` | A one-line-per-move trace of a seeded game |
-| `test/ai-audit.test.js` | Pins the fairness properties: no state changes, no dependence on deck order, Easy and Normal independent of hidden hands. Hard's dependence is recorded as a `todo` test (F1) |
+| `test/ai-audit.test.js` | Pinned the fairness properties: no state changes, no dependence on deck order, Easy and Normal independent of hidden hands. Hard's dependence was recorded as a `todo` test (F1). Assignment 6 replaced it with `test/ai-fairness.test.js` |

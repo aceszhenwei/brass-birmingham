@@ -598,6 +598,10 @@ const FIRST_ROUND_ACTIONS = 1;
 // Number of rounds per era depends on card count
 // Canal era ends when all cards are played
 // Rail era ends when all cards are played
+// With the deck sizes above (and one setup card per discard pile in the Canal
+// Era) every era lasts exactly this many rounds (rulebook p.6). The engine
+// still ends an era by the cards; this is the count it produces.
+const ROUNDS_PER_ERA = { 2: 10, 3: 9, 4: 8 };
 
 // ============================================================================
 // Position helpers for rendering

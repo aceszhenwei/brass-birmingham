@@ -63,6 +63,16 @@ logic.runGame((decision, logic) => chooseSomeMove(decision, logic));
 | `gameEnd` | `scores, ranking` | Final scoring |
 | `turnStart` | `playerId, era, round` | A new player (or new round / era) is up |
 
+### Rounds remaining
+
+`state.getRoundsRemaining()` is the number of rounds left in the current era,
+counting the round in progress:
+- it is 10 / 9 / 8 in the first round of an era at 2 / 3 / 4 players (`ROUNDS_PER_ERA`), and 1 in the last;
+- it is 0 once the era's cards are all played or the game is over.
+
+The engine still ends an era by its cards; the count is what the deck sizes
+produce, and the tests check it against the round ends of complete games.
+
 ### Final ranking
 
 `state.getFinalRanking()` ranks by VP, then income level, then money
