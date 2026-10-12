@@ -38,8 +38,9 @@ const PLAYERS = String(arg('players', '2,3,4')).split(',').map(Number);
 const SEEDS = Number(arg('seeds', experiment === 'mirror' ? 100 : 50));
 // Default: the Assignment 6 comparisons (corrections in isolation and
 // together against the Assignment 5 baseline, then the corrected ladder)
+// (the Assignment 6 AI is <level>~a6 since Assignment 8 changed production)
 const DEFAULT_PAIRS = 'hard-fairinfo:hard-a5,easy-rounds:easy-a5,normal-rounds:normal-a5,hard-rounds:hard-a5,' +
-    'easy:easy-a5,normal:normal-a5,hard:hard-a5,easy:normal,normal:hard,easy:hard';
+    'easy~a6:easy-a5,normal~a6:normal-a5,hard~a6:hard-a5,easy~a6:normal~a6,normal~a6:hard~a6,easy~a6:hard~a6';
 const PAIRS = String(arg('pairs', DEFAULT_PAIRS)).split(',').map(p => p.split(':'));
 const LEVELS = String(arg('levels', 'easy,normal,hard')).split(',');
 const OUT = arg('out', path.join('research-results', `${experiment}-${PLAYERS.join('')}.json`));

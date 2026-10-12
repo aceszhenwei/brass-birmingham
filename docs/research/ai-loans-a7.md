@@ -301,11 +301,16 @@ then would be a *consequence* of better spending, which is the right order.
 Everything is deterministic with Node.js 22+. Raw results go to the
 git-ignored `research-a7/` folder.
 
+Since Assignment 8 changed the production AI's overbuild scoring, the AI of
+this report is `AIPlayer.LEGACY_A6`. The `+` policies are pinned to it, and
+`ai-loans.js` takes `--overbuild a6`. The commands below reproduce this
+report's numbers exactly.
+
 ```
 # Investigation (about 1-2 min per player count)
-node scripts/research/ai-loans.js --players 3 --seeds 100 --levels easy,normal,hard     # and 2, 4
-node scripts/research/ai-loans.js --players 3 --seeds 100 --levels normal --loan enabling   # each candidate
-node scripts/research/ai-trace.js --players 3 --seed 203004 --seats normal,normal,normal --player 1
+node scripts/research/ai-loans.js --players 3 --seeds 100 --levels easy,normal,hard --overbuild a6     # and 2, 4
+node scripts/research/ai-loans.js --players 3 --seeds 100 --levels normal --loan enabling --overbuild a6   # each candidate
+node scripts/research/ai-trace.js --players 3 --seed 203004 --seats normal~a6,normal~a6,normal~a6 --player 1
 
 # Exploration (exploration seeds)
 P=normal+cashflow:normal+a6,normal+enabling:normal+a6,normal+cashflow+enabling:normal+a6,normal+never:normal+a6
@@ -332,5 +337,5 @@ node scripts/research/ai-compare.js research-a7/mirror-*.json \
 |---|---|
 | `scripts/research/ai-loans.js` | The loan investigation: situations, reasons, follow-ups, classes |
 | `scripts/research/ai-criteria.js` | Applies the pre-registered criteria: per-count and pooled win shares and VP differences |
-| `scripts/research/record-a6-baseline.js` | Records the production-AI fixture |
+| `scripts/research/record-a6-baseline.js` | Records the production-AI fixture (since Assignment 8: `record-ai-baseline.js --preset a6`) |
 | `test/ai-loans.test.js` | Pins the production AI and checks the research variants and diagnostics |

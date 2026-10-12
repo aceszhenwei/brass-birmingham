@@ -16,7 +16,7 @@ const fs = require('fs');
 const files = process.argv.slice(2).filter(a => !a.startsWith('--') && a.endsWith('.json'));
 const pairsArg = process.argv.indexOf('--pairs');
 const PAIRS = (pairsArg >= 0 ? process.argv[pairsArg + 1]
-    : 'hard-fairinfo:hard-a5,easy-rounds:easy-a5,normal-rounds:normal-a5,hard-rounds:hard-a5,easy:easy-a5,normal:normal-a5,hard:hard-a5')
+    : 'hard-fairinfo:hard-a5,easy-rounds:easy-a5,normal-rounds:normal-a5,hard-rounds:hard-a5,easy~a6:easy-a5,normal~a6:normal-a5,hard~a6:hard-a5')
     .split(',').map(p => p.split(':'));
 const rows = files.flatMap(f => JSON.parse(fs.readFileSync(f, 'utf8')).rows).filter(r => r.exp === 'mirror');
 

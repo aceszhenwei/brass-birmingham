@@ -2,7 +2,8 @@
 
 // Loan decision-making (Assignment 7). The production AI keeps the
 // Assignment 6 loan heuristic (the candidates were rejected; see
-// docs/research/ai-loans-a7.md). These tests pin that baseline, keep the
+// docs/research/ai-loans-a7.md). These tests pin the AI of Assignments 6-7
+// (AIPlayer.LEGACY_A6 since Assignment 8 changed overbuild scoring), keep the
 // research variants reproducible and well behaved, and check that the
 // diagnostics never change play.
 
@@ -18,9 +19,9 @@ const E = loadEngine();
 const ser = (s) => JSON.stringify(s.serialize());
 
 for (const players of [2, 3, 4]) {
-    test(`${players} players: the production AI replays the recorded Assignment 6 games exactly`, () => {
+    test(`${players} players: the Assignment 6-7 AI (LEGACY_A6) replays its recorded games exactly`, () => {
         for (const g of baseline.games[players]) {
-            const r = playGame({ players, seed: g.seed, difficulty: g.difficulty, E });
+            const r = playGame({ players, seed: g.seed, difficulty: g.difficulty, aiOptions: E.AIPlayer.LEGACY_A6, E });
             assert.equal(fingerprint(r.state, { steps: r.steps, actions: r.actions }), g.fingerprint,
                 `seed ${g.seed} (${g.difficulty}) no longer plays as recorded`);
         }

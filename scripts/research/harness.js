@@ -74,15 +74,17 @@ function randomPolicy(ctx, d) {
     return ofType[ctx.viewRng.int(ofType.length)];
 }
 
-// AI variants (Assignment 6). For each level:
-//   <level>           the current AI (fair information, engine rounds)
+// AI variants. For each level:
+//   <level>           the current production AI
+//   <level>~a6        the AI of Assignments 6-7 (AIPlayer.LEGACY_A6)
 //   <level>-a5        the Assignment 5 baseline, AIPlayer.LEGACY_A5: reads
 //                     opponents' hands (Hard) and uses the old rounds estimate
 //   <level>-fairinfo  the baseline with ONLY the information correction
 //   <level>-rounds    the baseline with ONLY the rounds correction
 const LEGACY = (E) => E.AIPlayer.LEGACY_A5;
-const FAIR_INFO_ONLY = { information: 'player', rounds: 'deck-estimate' };
-const ROUNDS_ONLY = { information: 'full', rounds: 'engine' };
+// (Assignment 6 variants keep the overbuild scoring of their time)
+const FAIR_INFO_ONLY = { information: 'player', rounds: 'deck-estimate', overbuild: 'a6' };
+const ROUNDS_ONLY = { information: 'full', rounds: 'engine', overbuild: 'a6' };
 
 const POLICIES = { random: randomPolicy };
 for (const level of ['easy', 'normal', 'hard']) {
@@ -97,15 +99,24 @@ POLICIES['hard-blind'] = aiPolicy('hard', LEGACY, 'empty');
 // ...or a plausible (resampled) opponent hand instead of the real one
 POLICIES['hard-fair'] = aiPolicy('hard', LEGACY, 'resample');
 // Loan-scoring variants (Assignment 7, js/aiPlayer.js options.loan), on the
-// current AI: <level>+a6 (the Assignment 6 loan heuristic), +cashflow,
-// +enabling, +cashflow+enabling, and +never (a no-loan ablation)
+// AI of that time (Assignment 6 overbuild scoring): <level>+a6 (the
+// Assignment 6 loan heuristic), +cashflow, +enabling, +cashflow+enabling,
+// and +never (a no-loan ablation)
 for (const level of ['easy', 'normal', 'hard']) {
     for (const loan of ['a6', 'cashflow', 'enabling', 'cashflow+enabling', 'never']) {
-        POLICIES[`${level}+${loan}`] = aiPolicy(level, { loan });
+        POLICIES[`${level}+${loan}`] = aiPolicy(level, { loan, overbuild: 'a6' });
+    }
+}
+// Overbuild-scoring variants (Assignment 8, options.overbuild): <level>~a6
+// (the AI of Assignments 6-7), ~opportunity (adopted: the production AI
+// since Assignment 8), ~opportunity-unflipped, ~no-unflipped
+for (const level of ['easy', 'normal', 'hard']) {
+    for (const overbuild of ['a6', 'opportunity', 'opportunity-unflipped', 'no-unflipped']) {
+        POLICIES[`${level}~${overbuild}`] = aiPolicy(level, { overbuild });
     }
 }
 const levelOf = (policy) => {
-    const level = policy.split(/[-+]/)[0];
+    const level = policy.split(/[-+~]/)[0];
     return ['easy', 'normal', 'hard'].includes(level) ? level : 'hard';
 };
 

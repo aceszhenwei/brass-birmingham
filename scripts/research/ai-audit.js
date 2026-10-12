@@ -2,10 +2,11 @@
 // Assignment 5: legality, fairness and decision-coverage probe for the
 // existing AI (docs/research/ai-baseline-audit.md, section 2).
 //
-//   node scripts/research/ai-audit.js [--games 10] [--players 2,3,4] [--baseline a5]
+//   node scripts/research/ai-audit.js [--games 10] [--players 2,3,4] [--baseline a5|a6]
 //
 // By default it probes the current AI; --baseline a5 probes the Assignment 5
-// baseline (AIPlayer.LEGACY_A5), which reproduces the Assignment 5 tables.
+// baseline (AIPlayer.LEGACY_A5), which reproduces the Assignment 5 tables, and
+// --baseline a6 the AI of Assignments 6-7 (AIPlayer.LEGACY_A6, the Assignment 6 tables).
 //
 // Plays all-AI games at each difficulty (seeds 1000*players + i, the same
 // seeds as scripts/simulate.js) and, at EVERY AI decision, checks:
@@ -36,7 +37,9 @@ function arg(name, fallback) {
 const GAMES = Number(arg('games', 10));
 const PLAYERS = String(arg('players', '2,3,4')).split(',').map(Number);
 const E = loadEngine();
-const OPTIONS = arg('baseline', null) === 'a5' ? E.AIPlayer.LEGACY_A5 : null;
+const BASELINES = { a5: E.AIPlayer.LEGACY_A5, a6: E.AIPlayer.LEGACY_A6 };
+const OPTIONS = BASELINES[arg('baseline', '')] || null;
+const LEGACY = OPTIONS === E.AIPlayer.LEGACY_A5;   // no correction columns for the uncorrected AI
 
 function probe(players, difficulty, seed, totals, examples) {
     const names = ['A', 'B', 'C', 'D'].slice(0, players);
@@ -62,10 +65,10 @@ function probe(players, difficulty, seed, totals, examples) {
         try { withDeck = choose(aiRng.clone()); } finally { state.drawDeck = savedDeck; }
 
         // How often each Assignment 6 correction changes the decision here
-        if (!OPTIONS) {
-            if (key(E.AIPlayer.chooseAction(state, logic, id, difficulty, aiRng.clone(), { information: 'full' })) !==
+        if (!LEGACY) {
+            if (key(E.AIPlayer.chooseAction(state, logic, id, difficulty, aiRng.clone(), { ...OPTIONS, information: 'full' })) !==
                 key(choose(aiRng.clone()))) totals.infoChanged++;
-            if (key(E.AIPlayer.chooseAction(state, logic, id, difficulty, aiRng.clone(), { rounds: 'deck-estimate' })) !==
+            if (key(E.AIPlayer.chooseAction(state, logic, id, difficulty, aiRng.clone(), { ...OPTIONS, rounds: 'deck-estimate' })) !==
                 key(choose(aiRng.clone()))) totals.roundsChanged++;
         }
 
@@ -105,9 +108,9 @@ function probe(players, difficulty, seed, totals, examples) {
 }
 
 const started = Date.now();
-const extra = OPTIONS ? '' : ' Changed by the information correction | Changed by the rounds correction |';
+const extra = LEGACY ? '' : ' Changed by the information correction | Changed by the rounds correction |';
 console.log('| Players | Difficulty | Decisions | Illegal | State changed | Changes with resampled opponent hands | Changes with reshuffled deck | Moves leaving a choice to the engine | Rail networks with a double link legal |' + extra);
-console.log('|---|---|---|---|---|---|---|---|---|' + (OPTIONS ? '' : '---|---|'));
+console.log('|---|---|---|---|---|---|---|---|---|' + (LEGACY ? '' : '---|---|'));
 const allExamples = {};
 for (const players of PLAYERS) {
     for (const difficulty of ['easy', 'normal', 'hard']) {
@@ -119,7 +122,7 @@ for (const players of PLAYERS) {
         const kinds = Object.entries(totals.choices).map(([k, n]) => `${k} ${n}`).join(', ');
         console.log(`| ${players} | ${difficulty} | ${totals.decisions} | ${totals.illegal} | ${totals.impure} | ` +
             `${pct(totals.handSensitive)} | ${pct(totals.deckSensitive)} | ${pct(totals.movesWithChoice)}${kinds ? ` (${kinds})` : ''} | ` +
-            `${totals.doubleRailLegal} of ${totals.railNetwork} |` + (OPTIONS ? '' : ` ${pct(totals.infoChanged)} | ${pct(totals.roundsChanged)} |`));
+            `${totals.doubleRailLegal} of ${totals.railNetwork} |` + (LEGACY ? '' : ` ${pct(totals.infoChanged)} | ${pct(totals.roundsChanged)} |`));
         if (examples.length) allExamples[`${players}p ${difficulty}`] = examples;
     }
 }
