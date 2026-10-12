@@ -44,4 +44,5 @@ choose moves and present what happened; neither advances the game. See
 | `screenshots/` | Images used by the README and the docs |
 | `test/` | The `node:test` suite, its helpers, and fixtures ([`testing.md`](testing.md)) |
 | `scripts/simulate.js` | The headless simulation run ([`testing.md`](testing.md)) |
+| `scripts/research/` | AI research experiments ([`research/ai-baseline-audit.md`](research/ai-baseline-audit.md)) |
 | `.github/workflows/` | Continuous integration ([`testing.md`](testing.md)) |

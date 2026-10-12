@@ -20,6 +20,11 @@ from, and how to run it. Everything more technical is here.
 - [`testing.md`](testing.md): the test suite, the simulation script, and the CI workflows.
 - [`known-limitations.md`](known-limitations.md): the current limitations, the rules interpretations, and open maintenance items.
 
+## Research
+
+- [`research/ai-baseline-audit.md`](research/ai-baseline-audit.md): an audit of the existing AI (Assignment 5). It covers how each difficulty decides; legality, fairness and hidden information; the baseline strength experiments; the measured weaknesses; and recommendations for the AI work.
+- [`research/ai-baseline-results.md`](research/ai-baseline-results.md): the full generated result tables.
+
 ## History
 
 These are records of the work on this fork, kept as written at the time.
