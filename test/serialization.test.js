@@ -164,7 +164,10 @@ test('malformed or incompatible saves are rejected with GameStateError', () => {
         'bad current player': () => ({ ...good(), currentPlayerIndex: 3 }),
         'turn order not a permutation': () => ({ ...good(), turnOrder: [0, 0, 1] }),
         'bad rng': () => ({ ...good(), rng: { seed: 1, state: -5 } }),
-        'negative money': () => { const d = good(); d.players[0].money = -1; return d; },
+        'negative money without tiles': () => { const d = good(); d.players[0].money = -1;
+            for (const k of Object.keys(d.boardIndustries)) if (d.boardIndustries[k].playerId === 0) delete d.boardIndustries[k];
+            for (const k of Object.keys(d.breweryFarmTiles)) if (d.breweryFarmTiles[k].playerId === 0) delete d.breweryFarmTiles[k];
+            return d; },
         'income out of range': () => { const d = good(); d.players[1].incomeSpace = 120; return d; },
         'too many cards': () => { const d = good(); while (d.players[0].hand.length < 9) d.players[0].hand.push(d.drawDeck[0] || { type: 'location', location: 'leek', name: 'Leek' }); return d; },
         'unknown location card': () => { const d = good(); d.drawDeck.push({ type: 'location', location: 'london', name: 'London' }); return d; },
@@ -189,4 +192,17 @@ test('malformed or incompatible saves are rejected with GameStateError', () => {
     }
     // The untouched save still loads
     assert.equal(ser(E.GameState.deserialize(good())), ser(state));
+});
+
+test('a game saved while an income shortfall is pending restores and continues', () => {
+    const { state } = midGame(3, 81, 40);
+    const pid = state.players.findIndex(p => state.ownedTileKeys(p.id).length > 0);
+    assert.ok(pid >= 0, 'fixture needs a player with tiles');
+    state.players[pid].money = -3;
+    const restored = E.GameState.deserialize(JSON.stringify(state.serialize()));
+    assert.deepEqual(plain(restored.getPendingShortfalls()), [pid]);
+    const logic = new E.GameLogic(restored);
+    const moves = logic.getLegalMoves(pid);
+    assert.ok(moves.length > 0 && moves.every(m => m.type === 'shortfall'));
+    assert.equal(logic.applyMove(pid, moves[0]).success, true);
 });

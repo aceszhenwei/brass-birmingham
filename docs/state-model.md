@@ -29,7 +29,7 @@ captured by `serialize()` and restored by `GameState.deserialize()`.
 
 **Player:**
 - `name`, `isAI`, `aiDifficulty`;
-- `money`, `incomeSpace` (0–99; the income *level* is derived from it), `vp`;
+- `money`, `incomeSpace` (0–99; the income *level* is derived from it), `vp`. Money is negative only while the player owes an **income-shortfall decision**: they must choose tiles to sell, using `shortfall` moves (see [`moves.md`](moves.md)). `getPendingShortfalls()` derives this, so the state holds no extra field;
 - `hand[]`;
 - `discardPile[]`: new in Assignment 2. It starts with the face-down setup card (`faceDown: true`), then holds every card discarded for an action, oldest first. Wild cards go back to their piles instead;
 - `industryTiles`: the player mat, one stack per industry, each tile marked `used` once built or developed;
@@ -113,7 +113,7 @@ then rebuilds a working state. Anything malformed or incompatible throws a
 `GameStateError` that names the problems. Validation checks:
 - **Format and version:** the format name; versions newer than this code are rejected.
 - **Players and turns:** the player count; the turn-order permutation; the current player; the era and round values.
-- **Cards and player data:** card shapes and known locations/industries; wild cards only in hands; hand size; money, income and VP ranges; mat shape.
+- **Cards and player data:** card shapes and known locations/industries; wild cards only in hands; hand size; money, income and VP ranges (negative money only for a player who owns tiles, i.e. a pending shortfall); mat shape.
 - **Board:** industry spaces exist and allow that industry; levels exist; owners are valid; links are on real connections and of a type that line allows.
 - **Markets, merchants and piles:** market ranges; merchant tiles; wild-card piles.
 - **RNG:** the generator state.

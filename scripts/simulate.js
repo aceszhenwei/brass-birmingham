@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Headless AI-vs-AI simulation for regression testing.
 //
-//   node scripts/simulate.js [--games 100] [--players 2,3,4] [--first 1] [--no-a1]
+//   node scripts/simulate.js [--games 100] [--players 2,3,4] [--first 1] [--no-a1] [--random 20]
 //
 // For every game (seed = 1000 * players + i, i = first .. first+games-1,
 // difficulty rotating easy/normal/hard):
@@ -14,12 +14,16 @@
 //   3. Unless --no-a1: replay the same seed with the Assignment 1 randomness
 //      layout and compare it to test/fixtures/assignment1-baseline.json
 //      (games recorded from the Assignment 1 code).
+// Then (--random N, default 20 per player count) play N games choosing at
+// random among getLegalMoves with every choice expanded, including random
+// income-shortfall decisions: every listed move must apply and every
+// invariant must hold.
 // The exit code is non-zero if anything went wrong.
 
 'use strict';
 
 const { loadEngine } = require('../test/helpers/engine');
-const { playGame, continuationCheck } = require('../test/helpers/headless');
+const { playGame, continuationCheck, randomPlayout } = require('../test/helpers/headless');
 const { fingerprint } = require('../test/helpers/fingerprint');
 const baseline = require('../test/fixtures/assignment1-baseline.json');
 
@@ -32,6 +36,7 @@ const GAMES = Number(arg('games', 100));
 const PLAYERS = String(arg('players', '2,3,4')).split(',').map(Number);
 const FIRST = Number(arg('first', 1));
 const COMPARE_A1 = !process.argv.includes('--no-a1');
+const RANDOM = Number(arg('random', 20));
 const ROUNDS = { 2: 10, 3: 9, 4: 8 };
 const DIFFICULTIES = ['easy', 'normal', 'hard'];
 const E = loadEngine();
@@ -88,6 +93,29 @@ for (const players of PLAYERS) {
     if (completed) {
         console.log(`  avg actions/game: ${(steps / completed).toFixed(1)}, avg winning VP: ${(winnerVP / completed).toFixed(1)}`);
         console.log(`  actions: ${Object.entries(actions).sort((a, b) => b[1] - a[1]).map(([a, n]) => `${a} ${n}`).join(', ')}`);
+    }
+    if (RANDOM > 0) {
+        const r0 = Date.now();
+        let randomOk = 0;
+        let maxMoves = 0;
+        const randomMoves = {};
+        for (let i = 1; i <= RANDOM; i++) {
+            try {
+                const g = randomPlayout(E, { players, seed: 50000 + 1000 * players + i });
+                if (g.canalRounds !== ROUNDS[players] || g.railRounds !== ROUNDS[players]) {
+                    roundMismatches.push(`random seed ${g.seed}: canal ${g.canalRounds}, rail ${g.railRounds}`);
+                } else {
+                    randomOk++;
+                }
+                maxMoves = Math.max(maxMoves, g.maxLegalMoves);
+                for (const [t, n] of Object.entries(g.moves)) randomMoves[t] = (randomMoves[t] || 0) + n;
+            } catch (err) {
+                failures.push(`random: ${err.message.split('\n').slice(0, 4).join('\n    ')}`);
+            }
+        }
+        totalProblems += RANDOM - randomOk;
+        console.log(`  random legal-move games: ${randomOk}/${RANDOM} completed in ${((Date.now() - r0) / 1000).toFixed(1)}s ` +
+            `(up to ${maxMoves} legal moves per position; ${Object.entries(randomMoves).map(([t, n]) => `${t} ${n}`).join(', ')})`);
     }
     for (const m of roundMismatches) console.log(`  ROUNDS ${m}`);
     for (const m of a1Mismatches) console.log(`  DIFFERS FROM ASSIGNMENT 1 ${m}`);

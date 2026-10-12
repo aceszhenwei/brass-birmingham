@@ -689,8 +689,11 @@ class GameState {
             for (const player of this.players) {
                 const level = incomeLevelFromSpace(player.incomeSpace);
                 player.money += level;
-                if (player.money < 0) {
-                    this.resolveShortfall(player);
+                // A player who can't pay must sell industry tiles of their
+                // choice (a pending 'shortfall' decision, see
+                // getPendingShortfalls); with no tiles, they lose VP at once.
+                if (player.money < 0 && this.ownedTileKeys(player.id).length === 0) {
+                    this.loseVPForShortfall(player);
                 }
             }
         }
@@ -720,49 +723,76 @@ class GameState {
         return 'continue';
     }
 
-    // A player who cannot pay negative income must sell industry tiles from
-    // the board for half their cost (rounded down), stopping as soon as the
-    // shortfall is covered; if that still isn't enough, they lose 1 VP per £1.
-    resolveShortfall(player) {
-        const candidates = [];
+    // ========================================================================
+    // Income shortfall (rulebook p.6)
+    // ========================================================================
+    // A player who cannot pay negative income must remove industry tiles of
+    // THEIR CHOICE from the board for half their cost (rounded down), one at
+    // a time, stopping as soon as the shortfall is covered; if they run out of
+    // tiles they lose 1 VP per £1 still owed. While a player's money is below
+    // zero they owe a 'shortfall' decision (GameLogic move { type:
+    // 'shortfall', tile }) and no other move may be played.
+
+    // Players who still owe a shortfall decision
+    getPendingShortfalls() {
+        return this.players.filter(p => p.money < 0).map(p => p.id);
+    }
+
+    // Keys of every industry tile a player owns (board 'city_slot', or a
+    // farm id), in board order
+    ownedTileKeys(playerId) {
+        const keys = [];
         for (const [key, tile] of Object.entries(this.boardIndustries)) {
-            if (tile.playerId === player.id) candidates.push({ key, tile, farm: false });
+            if (tile.playerId === playerId) keys.push(key);
         }
         for (const [farmId, tile] of Object.entries(this.breweryFarmTiles)) {
-            if (tile && tile.playerId === player.id) candidates.push({ key: farmId, tile, farm: true });
+            if (tile && tile.playerId === playerId) keys.push(farmId);
         }
-        // Auto-choice: give up unflipped low-VP tiles before flipped ones
-        candidates.sort((a, b) =>
-            (Number(a.tile.flipped) - Number(b.tile.flipped)) ||
-            (a.tile.tileData.vp - b.tile.tileData.vp));
+        return keys;
+    }
 
-        for (const cand of candidates) {
-            if (player.money >= 0) break;
-            const refund = Math.floor(cand.tile.tileData.cost / 2);
-            if (cand.farm) delete this.breweryFarmTiles[cand.key];
-            else delete this.boardIndustries[cand.key];
-            player.money += refund;
-            this.lastRoundEvents.push({
-                type: 'shortfall-sale',
-                playerId: player.id,
-                message: `sold ${INDUSTRY_DISPLAY[cand.tile.type].name} Lv${cand.tile.tileData.level} for £${refund} to cover income shortfall`,
-            });
+    // Sell one tile to cover a shortfall (the move has been validated).
+    // Returns a log message.
+    sellTileForShortfall(playerId, key) {
+        const player = this.players[playerId];
+        const farm = !!BREWERY_FARMS[key];
+        const tile = farm ? this.breweryFarmTiles[key] : this.boardIndustries[key];
+        const refund = Math.floor(tile.tileData.cost / 2);
+        if (farm) delete this.breweryFarmTiles[key];
+        else delete this.boardIndustries[key];
+        player.money += refund;
+        let message = `sold ${INDUSTRY_DISPLAY[tile.type].name} Lv${tile.tileData.level} for £${refund} to cover income shortfall`;
+        if (player.money < 0 && this.ownedTileKeys(playerId).length === 0) {
+            message += `; ${this.loseVPForShortfall(player)}`;
         }
+        return message;
+    }
 
-        if (player.money < 0) {
-            const deficit = -player.money;
-            const vpLoss = Math.min(player.vp, deficit);
-            player.vp -= vpLoss;
-            player.money = 0;
-            this.lastRoundEvents.push({
-                type: 'shortfall-vp',
-                playerId: player.id,
-                message: `could not pay income shortfall — lost ${vpLoss} VP`,
-            });
-        }
+    // No tiles left: lose 1 VP per £1 still owed (never below 0 VP)
+    loseVPForShortfall(player) {
+        const vpLoss = Math.min(player.vp, -player.money);
+        player.vp -= vpLoss;
+        player.money = 0;
+        const message = `could not pay income shortfall — lost ${vpLoss} VP`;
+        this.lastRoundEvents.push({ type: 'shortfall-vp', playerId: player.id, message });
+        return message;
+    }
+
+    // The tile the automatic policy would sell (used for AI players): unflipped
+    // tiles before flipped ones, then the lowest VP
+    defaultShortfallTile(playerId) {
+        const keys = this.ownedTileKeys(playerId);
+        const tileOf = (key) => (BREWERY_FARMS[key] ? this.breweryFarmTiles[key] : this.boardIndustries[key]);
+        const sorted = [...keys].sort((a, b) =>
+            (Number(tileOf(a).flipped) - Number(tileOf(b).flipped)) ||
+            (tileOf(a).tileData.vp - tileOf(b).tileData.vp));
+        return sorted[0];
     }
 
     endCanalEra() {
+        if (this.getPendingShortfalls().length > 0) {
+            throw new Error('Income shortfalls must be covered before the Canal Era is scored');
+        }
         // Score canal era
         const scores = this.calculateEraScore();
 
@@ -1185,7 +1215,9 @@ class GameState {
             if (typeof p.name !== 'string') err(`${at}: invalid name`);
             if (typeof p.isAI !== 'boolean') err(`${at}: invalid isAI`);
             if (!['easy', 'normal', 'hard'].includes(p.aiDifficulty)) err(`${at}: invalid AI difficulty`);
-            if (!isInt(p.money) || p.money < 0) err(`${at}: invalid money ${p.money}`);
+            // Negative money only while an income shortfall is pending, which
+            // requires tiles to sell (checked against the board below)
+            if (!isInt(p.money)) err(`${at}: invalid money ${p.money}`);
             if (!intIn(p.incomeSpace, 0, MAX_INCOME_SPACE)) err(`${at}: invalid income space ${p.incomeSpace}`);
             if (!isInt(p.vp) || p.vp < 0) err(`${at}: invalid VP ${p.vp}`);
             validCards(p.hand, `${at}.hand`, true);
@@ -1259,6 +1291,16 @@ class GameState {
         validCards(data.drawDeck, 'drawDeck', false);
         if (!intIn(data.wildLocationPile, 0, 4) || !intIn(data.wildIndustryPile, 0, 4)) err('invalid wild card piles');
         if (data.lastRoundEvents !== undefined && !Array.isArray(data.lastRoundEvents)) err('invalid round events');
+
+        if (isObj(data.boardIndustries) && isObj(data.breweryFarmTiles)) {
+            const owners = new Set([...Object.values(data.boardIndustries), ...Object.values(data.breweryFarmTiles)]
+                .map(t => t && t.playerId));
+            data.players.forEach((p, i) => {
+                if (isObj(p) && isInt(p.money) && p.money < 0 && !owners.has(i)) {
+                    err(`players[${i}]: negative money with no tiles to sell`);
+                }
+            });
+        }
 
         if (errors.length) throw new GameStateError(`Invalid saved game: ${errors.join('; ')}`);
     }
