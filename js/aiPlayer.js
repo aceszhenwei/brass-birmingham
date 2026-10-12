@@ -367,8 +367,52 @@ const AIPlayer = (() => {
         return cheapest;
     }
 
+    // Income payments still to come in the game: one at the end of every
+    // remaining round except the game's last (used by options.loan 'cashflow')
+    function incomePaymentsLeft(state) {
+        const r = state.getRoundsRemaining();
+        return state.era === ERA.CANAL ? r + ROUNDS_PER_ERA[state.numPlayers] - 1 : Math.max(0, r - 1);
+    }
+
+    // The best Build or Network score among targets affordable with `extra`
+    // more money (-Infinity if none). The money is added only for the query.
+    function bestBuildOrNetworkScore(state, logic, playerId, extra, onlyNew) {
+        const player = state.players[playerId];
+        const key = (t) => (t.connectionId ? `n:${t.connectionId}` : `b:${t.cityId}:${t.slotIndex}:${t.industryType}`);
+        const before = onlyNew ? new Set([...logic.getValidBuildTargets(playerId), ...logic.getValidNetworkTargets(playerId)].map(key)) : null;
+        player.money += extra;
+        try {
+            let best = -Infinity;
+            for (const t of logic.getValidBuildTargets(playerId)) {
+                if (before && before.has(key(t))) continue;
+                best = Math.max(best, scoreBuildCandidate(state, logic, playerId, t));
+            }
+            for (const t of logic.getValidNetworkTargets(playerId)) {
+                if (before && before.has(key(t))) continue;
+                best = Math.max(best, scoreNetworkCandidate(state, logic, playerId, t));
+            }
+            return best;
+        } finally {
+            player.money -= extra;
+        }
+    }
+
+    // Loan scoring. options.loan selects a research variant (Assignment 7):
+    //   'a6' (default)  the original heuristic below
+    //   'cashflow'      the loan's money value is what it actually yields: £30
+    //                   now minus £3 for every income payment still to come
+    //                   (replaces the flat 0.25 discount and the era-only
+    //                   income term)
+    //   'enabling'      instead of a flat +4 whenever nothing is affordable,
+    //                   the loan earns what it makes possible: how much better
+    //                   the best Build / Network it newly makes affordable
+    //                   scores than the best one affordable now (and Pass)
+    //   'cashflow+enabling'  both
+    //   'never'         never borrow (a diagnostic ablation, not a candidate)
     function scoreLoanResult(state, logic, playerId) {
         if (!state.canTakeLoan(playerId)) return null;
+        const variant = options.loan || 'a6';
+        if (variant === 'never') return null;
         const player = state.players[playerId];
         const incomeLevel = state.getIncomeLevel(playerId);
         const cheapest = cheapestAffordableBuildOrNetworkCost(state, logic, playerId);
@@ -376,22 +420,28 @@ const AIPlayer = (() => {
         // no direct end-game value, so only credit a small flexibility premium
         // for the raw cash, and let cashCrunchBonus carry the real signal for
         // when a loan is actually needed to afford the next move.
-        const cashCrunchBonus = (player.money < cheapest) ? 4.0 : 0;
-        const alreadyFlushPenalty = player.money > cheapest * 2.5 ? 2.5 : 0;
+        const enabling = variant.includes('enabling');
+        let cashCrunchBonus = (player.money < cheapest) ? 4.0 : 0;
+        let alreadyFlushPenalty = player.money > cheapest * 2.5 ? 2.5 : 0;
         const incomeFloorPenalty = incomeLevel <= (MIN_INCOME + 5) ? 2.5 : 0;
+        if (enabling) {
+            const now = Math.max(PASS_SCORE, bestBuildOrNetworkScore(state, logic, playerId, 0, false));
+            const enabled = bestBuildOrNetworkScore(state, logic, playerId, LOAN_AMOUNT, true);
+            cashCrunchBonus = Math.max(0, enabled - now);
+            alreadyFlushPenalty = 0;
+        }
 
-        const score = vpEquivalent(state, { money: LOAN_AMOUNT * 0.25, income: -LOAN_INCOME_PENALTY })
-            + cashCrunchBonus - incomeFloorPenalty - alreadyFlushPenalty;
+        const base = variant.includes('cashflow')
+            ? vpEquivalent(state, { money: LOAN_AMOUNT - LOAN_INCOME_PENALTY * incomePaymentsLeft(state) })
+            : vpEquivalent(state, { money: LOAN_AMOUNT * 0.25, income: -LOAN_INCOME_PENALTY });
+        const score = base + cashCrunchBonus - incomeFloorPenalty - alreadyFlushPenalty;
 
         const cardIndex = pickCardIndex(logic, playerId, ACTIONS.LOAN, null, player);
         if (cardIndex === null) return null;
 
-        return {
-            action: ACTIONS.LOAN,
-            pendingData: {},
-            cardIndex,
-            score,
-        };
+        const result = { action: ACTIONS.LOAN, pendingData: {}, cardIndex, score };
+        if (options.explain) result.parts = { base, cashCrunchBonus, alreadyFlushPenalty, incomeFloorPenalty, cheapest };
+        return result;
     }
 
     // ------------------------------------------------------------------
@@ -422,6 +472,8 @@ const AIPlayer = (() => {
     // PASS
     // ------------------------------------------------------------------
 
+    const PASS_SCORE = -0.5;
+
     function scorePassResult(state, logic, playerId) {
         const player = state.players[playerId];
         const cardIndex = pickCardIndex(logic, playerId, ACTIONS.PASS, null, player);
@@ -429,7 +481,7 @@ const AIPlayer = (() => {
             action: ACTIONS.PASS,
             pendingData: {},
             cardIndex: cardIndex === null ? 0 : cardIndex,
-            score: -0.5,
+            score: PASS_SCORE,
         };
     }
 
@@ -524,6 +576,8 @@ const AIPlayer = (() => {
     //   information: 'player' (default) decides on the player's observation;
     //                'full' decides on the real state (Assignment 5 baseline)
     //   rounds:      'engine' (default) | 'deck-estimate' (Assignment 5 baseline)
+    //   explain:     true adds `explain` (every candidate's score) to the decision
+    //   loan:        loan-scoring variant (see scoreLoanResult; default 'a6')
     // AIPlayer.LEGACY_A5 sets both to the Assignment 5 behaviour.
     function chooseAction(state, logic, playerId, difficulty = 'normal', rng = null, opts = null) {
         const previous = options;
@@ -573,11 +627,16 @@ const AIPlayer = (() => {
             return { action: ACTIONS.PASS, pendingData: {}, cardIndex: 0 };
         }
 
+        const unperturbed = options.explain ? results.map(r => ({ action: r.action, score: r.score, parts: r.parts })) : null;
         const forced = applyDifficulty(state, logic, playerId, results, difficulty, random);
-        if (forced) return forced;
-
         results.sort((a, b) => b.score - a.score);
-        return results[0];
+        const chosen = forced || results[0];
+        // Research diagnostics (options.explain): every candidate's score
+        // before and after the difficulty perturbation. Does not affect play.
+        if (unperturbed) {
+            return { ...chosen, explain: { candidates: unperturbed, final: results.map(r => ({ action: r.action, score: r.score })), forced: !!forced } };
+        }
+        return chosen;
     }
 
     return { chooseAction, LEGACY_A5, roundsRemaining: (state, opts = null) => {
