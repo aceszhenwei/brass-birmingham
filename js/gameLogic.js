@@ -1055,7 +1055,7 @@ class GameLogic {
         // Need at least 3 cards in hand (1 for action + 2 additional)
         if (player.hand.length < 3) return false;
         // Cannot have wild cards already
-        if (player.hasWildLocation || player.hasWildIndustry) return false;
+        if (this.state.playerHasWildCard(playerId)) return false;
         // Must have wild cards available
         if (this.state.wildLocationPile <= 0 || this.state.wildIndustryPile <= 0) return false;
         return true;
@@ -1074,7 +1074,9 @@ class GameLogic {
             return { success: false, message: 'Must discard exactly 3 different cards' };
         }
 
-        // Remove cards in reverse index order to maintain indices
+        // Discard the 3 cards face up (in the order chosen), then remove
+        // them from the hand in reverse index order to keep indices valid
+        for (const idx of cardIndices) player.discardPile.push(player.hand[idx]);
         const sorted = [...cardIndices].sort((a, b) => b - a);
         for (const idx of sorted) {
             player.hand.splice(idx, 1);
@@ -1089,9 +1091,6 @@ class GameLogic {
             type: CARD_TYPES.WILD_INDUSTRY,
             name: 'Wild Industry',
         });
-
-        player.hasWildLocation = true;
-        player.hasWildIndustry = true;
 
         this.state.wildLocationPile--;
         this.state.wildIndustryPile--;
@@ -1174,7 +1173,7 @@ class GameLogic {
                 return null;
             case ACTIONS.SCOUT:
                 if (player.hand.length < 3) return 'Need at least 3 cards';
-                if (player.hasWildLocation || player.hasWildIndustry) return 'Already have wild cards';
+                if (this.state.playerHasWildCard(playerId)) return 'Already have wild cards';
                 if (this.state.wildLocationPile <= 0 || this.state.wildIndustryPile <= 0) return 'No wild cards available';
                 return null;
             case ACTIONS.PASS:
@@ -1200,13 +1199,13 @@ class GameLogic {
 
         const card = player.hand[cardIndex];
 
-        // Wild cards go back to their piles
+        // Wild cards go back to their piles; all others onto the discard pile
         if (card.type === CARD_TYPES.WILD_LOCATION) {
             this.state.wildLocationPile++;
-            player.hasWildLocation = false;
         } else if (card.type === CARD_TYPES.WILD_INDUSTRY) {
             this.state.wildIndustryPile++;
-            player.hasWildIndustry = false;
+        } else {
+            player.discardPile.push(card);
         }
 
         player.hand.splice(cardIndex, 1);

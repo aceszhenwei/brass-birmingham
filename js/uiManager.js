@@ -20,6 +20,10 @@ class UIManager {
         this.state = gameState;
         this.logic = gameLogic;
         this.renderer = boardRenderer;
+        // The AI's own random stream (difficulty noise), derived from the
+        // game seed so a seeded game is reproducible end to end, but kept
+        // separate so AI thinking never changes the game's shuffles.
+        this.aiRng = new SeededRandom((gameState.rng.seed ^ 0x9E3779B9) >>> 0);
 
         this.bindEvents();
         this.addLogEntry(null, `Game started with ${this.state.numPlayers} players`, 'system');
@@ -1265,7 +1269,7 @@ class UIManager {
 
         let decision;
         try {
-            decision = AIPlayer.chooseAction(this.state, this.logic, playerId, player.aiDifficulty);
+            decision = AIPlayer.chooseAction(this.state, this.logic, playerId, player.aiDifficulty, this.aiRng);
         } catch (err) {
             this.recoverAITurn(err && err.message ? err.message : String(err));
             return;

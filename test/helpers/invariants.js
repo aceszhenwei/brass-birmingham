@@ -33,7 +33,9 @@ function checkInvariants(E, state) {
         wildLoc += wl;
         wildInd += wi;
         if (wl > 1 || wi > 1) bad(`player ${p.id} holds more than one wild card of a kind`);
-        if (p.hasWildLocation !== (wl > 0) || p.hasWildIndustry !== (wi > 0)) bad(`player ${p.id} wild flags out of sync`);
+        if (p.discardPile.some(c => c.type === E.CARD_TYPES.WILD_LOCATION || c.type === E.CARD_TYPES.WILD_INDUSTRY)) {
+            bad(`player ${p.id} has a wild card in their discard pile`);
+        }
 
         // Link tiles: placed (current era type) + remaining = 14
         const type = state.era === E.ERA.CANAL ? 'canal' : 'rail';
@@ -43,6 +45,26 @@ function checkInvariants(E, state) {
         }
     }
     if (wildLoc !== 4 || wildInd !== 4) bad(`wild cards not conserved (location ${wildLoc}, industry ${wildInd})`);
+
+    // Card conservation: draw deck + hands + discard piles always hold exactly
+    // the deck for this player count (wild cards aside)
+    const cardKey = (c) => c.type === E.CARD_TYPES.LOCATION ? `L:${c.location}` : `I:${[...c.industryTypes].join('/')}`;
+    const expected = {};
+    const deckData = E.CARD_DECK[state.numPlayers];
+    for (const [loc, n] of Object.entries(deckData.locations)) expected[`L:${loc}`] = n;
+    for (const [type, n] of Object.entries(deckData.industries)) expected[`I:${type}`] = n;
+    if (deckData.dualCottonManufacturer) {
+        expected[`I:${E.INDUSTRY_TYPES.COTTON_MILL}/${E.INDUSTRY_TYPES.MANUFACTURER}`] = deckData.dualCottonManufacturer;
+    }
+    const actual = {};
+    const isWild = (c) => c.type === E.CARD_TYPES.WILD_LOCATION || c.type === E.CARD_TYPES.WILD_INDUSTRY;
+    for (const c of [...state.drawDeck, ...state.players.flatMap(p => [...p.hand, ...p.discardPile])]) {
+        if (!isWild(c)) actual[cardKey(c)] = (actual[cardKey(c)] || 0) + 1;
+    }
+    const keys = new Set([...Object.keys(expected), ...Object.keys(actual)]);
+    for (const k of keys) {
+        if ((expected[k] || 0) !== (actual[k] || 0)) bad(`card ${k}: ${actual[k] || 0} in play, expected ${expected[k] || 0}`);
+    }
     if (state.era === E.ERA.RAIL && Object.values(state.boardLinks).some(l => l.type === 'canal')) {
         bad('canal link on the board during the Rail Era');
     }

@@ -415,11 +415,11 @@ const AIPlayer = (() => {
     // Difficulty perturbation
     // ------------------------------------------------------------------
 
-    function applyDifficulty(state, logic, playerId, results, difficulty) {
+    function applyDifficulty(state, logic, playerId, results, difficulty, random) {
         if (difficulty === 'easy') {
-            for (const r of results) r.score += (Math.random() - 0.5) * 4;
-            if (Math.random() < 0.15 && results.length > 0) {
-                return results[Math.floor(Math.random() * results.length)];
+            for (const r of results) r.score += (random() - 0.5) * 4;
+            if (random() < 0.15 && results.length > 0) {
+                return results[Math.floor(random() * results.length)];
             }
         } else if (difficulty === 'hard') {
             for (const r of results) {
@@ -429,7 +429,7 @@ const AIPlayer = (() => {
             }
         } else {
             // normal
-            for (const r of results) r.score += (Math.random() - 0.5) * 1.2;
+            for (const r of results) r.score += (random() - 0.5) * 1.2;
         }
         return null;
     }
@@ -451,7 +451,12 @@ const AIPlayer = (() => {
     // Public API
     // ------------------------------------------------------------------
 
-    function chooseAction(state, logic, playerId, difficulty = 'normal') {
+    // rng: optional SeededRandom for the difficulty noise, so AI play is
+    // reproducible. It is deliberately separate from the game's own
+    // generator: the AI thinking must not change future deck shuffles.
+    // Without one, Math.random is used (unseeded, as before).
+    function chooseAction(state, logic, playerId, difficulty = 'normal', rng = null) {
+        const random = rng ? () => rng.next() : Math.random;
         const results = [];
 
         if (logic.canPerformAction(ACTIONS.BUILD, playerId)) {
@@ -484,7 +489,7 @@ const AIPlayer = (() => {
             return { action: ACTIONS.PASS, pendingData: {}, cardIndex: 0 };
         }
 
-        const forced = applyDifficulty(state, logic, playerId, results, difficulty);
+        const forced = applyDifficulty(state, logic, playerId, results, difficulty, random);
         if (forced) return forced;
 
         results.sort((a, b) => b.score - a.score);

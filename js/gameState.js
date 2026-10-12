@@ -2,8 +2,37 @@
 // Brass: Birmingham - Game State Management
 // ============================================================================
 
+// Saved-state format identifiers. Bump GAME_STATE_VERSION whenever the
+// serialize() layout changes incompatibly (and teach deserialize to migrate).
+const GAME_STATE_FORMAT = 'brass-birmingham/game-state';
+const GAME_STATE_VIEW_FORMAT = 'brass-birmingham/player-view';
+const GAME_STATE_VERSION = 1;
+
+class GameStateError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'GameStateError';
+    }
+}
+
+// Copy of a card with no shared references
+function copyCard(card) {
+    const out = { type: card.type, name: card.name };
+    if (card.location !== undefined) out.location = card.location;
+    if (card.industryTypes !== undefined) out.industryTypes = [...card.industryTypes];
+    if (card.faceDown) out.faceDown = true;
+    return out;
+}
+
 class GameState {
-    constructor(numPlayers, playerNames, playerIsAI = []) {
+    // options.seed: 32-bit integer seed for all gameplay randomness. The same
+    // seed and the same actions always reproduce the same game; without a
+    // seed a fresh random one is chosen (normal play).
+    constructor(numPlayers, playerNames, playerIsAI = [], options = {}) {
+        const seed = options.seed !== undefined && options.seed !== null
+            ? options.seed : SeededRandom.randomSeed();
+        this.rng = new SeededRandom(seed);
+
         this.numPlayers = numPlayers;
         this.playerNames = playerNames;
         this.era = ERA.CANAL;
@@ -56,11 +85,6 @@ class GameState {
         // exactly 10/9/8 rounds at 2/3/4 players.
         this.dealCards();
         this.seedDiscardPiles();
-
-        // Selected card for current action
-        this.selectedCardIndex = null;
-        this.selectedAction = null;
-        this.pendingAction = null; // { action, step, data }
     }
 
     createPlayer(index, name, isAI = false, aiDifficulty = 'normal') {
@@ -89,10 +113,12 @@ class GameState {
             incomeSpace: INITIAL_INCOME_SPACE, // progress track space (level 0)
             vp: 0,
             hand: [],
+            // Cards discarded this era, oldest first. The setup card is
+            // face down (faceDown: true); action cards are face up. Wild
+            // cards never go here — they return to their piles.
+            discardPile: [],
             industryTiles: industryTiles,
             linksRemaining: { canal: 14, rail: 14 },
-            hasWildLocation: false,
-            hasWildIndustry: false,
             isAI: isAI,
             aiDifficulty: aiDifficulty,
         };
@@ -173,11 +199,22 @@ class GameState {
     }
 
     // Each player places 1 card from the deck face down as their discard pile
-    // at setup and after the era transition reshuffle.
+    // at setup (the Rail Era does not repeat this).
     seedDiscardPiles() {
         for (const player of this.players) {
-            if (this.drawDeck.length > 0) this.drawDeck.pop();
+            if (this.drawDeck.length > 0) {
+                player.discardPile.push({ ...this.drawDeck.pop(), faceDown: true });
+            }
         }
+    }
+
+    // Does the player hold a wild card? (Derived from the hand, so it can
+    // never disagree with it.) type: CARD_TYPES.WILD_LOCATION /
+    // WILD_INDUSTRY, or omitted for either.
+    playerHasWildCard(playerId, type = null) {
+        return this.players[playerId].hand.some(c => type
+            ? c.type === type
+            : c.type === CARD_TYPES.WILD_LOCATION || c.type === CARD_TYPES.WILD_INDUSTRY);
     }
 
     drawCards(playerId) {
@@ -187,11 +224,9 @@ class GameState {
         }
     }
 
+    // Every gameplay shuffle draws from the game's seeded generator
     shuffleArray(arr) {
-        for (let i = arr.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [arr[i], arr[j]] = [arr[j], arr[i]];
-        }
+        this.rng.shuffle(arr);
     }
 
     // ========================================================================
@@ -580,9 +615,6 @@ class GameState {
 
     advanceTurn() {
         this.actionsThisTurn++;
-        this.selectedCardIndex = null;
-        this.selectedAction = null;
-        this.pendingAction = null;
 
         // Check if era should end mid-turn (all hands empty, deck exhausted).
         // Call endRound to distribute income before signaling era end.
@@ -775,18 +807,17 @@ class GameState {
         // Return any wild cards from player hands before clearing
         for (const player of this.players) {
             for (const card of player.hand) {
-                if (card.type === CARD_TYPES.WILD_LOCATION) {
-                    this.wildLocationPile++;
-                    player.hasWildLocation = false;
-                } else if (card.type === CARD_TYPES.WILD_INDUSTRY) {
-                    this.wildIndustryPile++;
-                    player.hasWildIndustry = false;
-                }
+                if (card.type === CARD_TYPES.WILD_LOCATION) this.wildLocationPile++;
+                else if (card.type === CARD_TYPES.WILD_INDUSTRY) this.wildIndustryPile++;
             }
             player.hand = [];
+            player.discardPile = [];
         }
 
         // Reshuffle all cards into draw deck and deal new hands.
+        // The discard piles hold exactly the full deck at this point (every
+        // non-wild card has been played), so rebuilding the deck from the
+        // card list is equivalent to shuffling the piles together.
         // Rulebook: the rail era does NOT start with seeded discard piles.
         this.initDeck();
         this.dealCards();
@@ -944,6 +975,314 @@ class GameState {
             };
         }
         return result;
+    }
+
+    // ========================================================================
+    // Cloning and serialization
+    // ========================================================================
+    // serialize() captures EVERYTHING needed to continue the game exactly,
+    // including hidden information: every hand, the draw deck order, the
+    // face-down discards and the random generator state (which determines
+    // future shuffles). It is an engine/AI facility — never show it to
+    // players; getPlayerView() and toJSON() are the player-facing views.
+    //
+    // Board tiles and player mats are stored compactly (industry type + level
+    // / used flags) and their printed data is rebuilt from INDUSTRY_DATA on
+    // load, so a saved game can't carry stale or tampered tile values.
+
+    serialize() {
+        const tileOut = (t) => ({
+            playerId: t.playerId,
+            type: t.type,
+            level: t.tileData.level,
+            flipped: t.flipped,
+            resourceCubes: t.resourceCubes,
+        });
+        const mapValues = (obj, fn) => {
+            const out = {};
+            for (const [k, v] of Object.entries(obj)) if (v) out[k] = fn(v);
+            return out;
+        };
+        const mat = (player) => {
+            const out = {};
+            for (const [type, tiles] of Object.entries(player.industryTiles)) out[type] = tiles.map(t => t.used);
+            return out;
+        };
+
+        return {
+            format: GAME_STATE_FORMAT,
+            version: GAME_STATE_VERSION,
+            numPlayers: this.numPlayers,
+            era: this.era,
+            round: this.round,
+            currentPlayerIndex: this.currentPlayerIndex,
+            actionsThisTurn: this.actionsThisTurn,
+            actionsPerTurn: this.actionsPerTurn,
+            isFirstRound: this.isFirstRound,
+            gameOver: this.gameOver,
+            turnOrder: [...this.turnOrder],
+            moneySpentThisRound: { ...this.moneySpentThisRound },
+            rng: this.rng.getState(),
+            players: this.players.map(p => ({
+                name: p.name,
+                isAI: p.isAI,
+                aiDifficulty: p.aiDifficulty,
+                money: p.money,
+                incomeSpace: p.incomeSpace,
+                vp: p.vp,
+                hand: p.hand.map(copyCard),
+                discardPile: p.discardPile.map(copyCard),
+                linksRemaining: { canal: p.linksRemaining.canal, rail: p.linksRemaining.rail },
+                mat: mat(p),
+            })),
+            boardIndustries: mapValues(this.boardIndustries, tileOut),
+            breweryFarmTiles: mapValues(this.breweryFarmTiles, tileOut),
+            boardLinks: mapValues(this.boardLinks, l => ({ playerId: l.playerId, type: l.type })),
+            coalMarket: this.coalMarket,
+            ironMarket: this.ironMarket,
+            merchantTiles: this.merchantTiles.map(m => ({ location: m.location, buys: m.buys, hasBeer: m.hasBeer })),
+            drawDeck: this.drawDeck.map(copyCard),
+            wildLocationPile: this.wildLocationPile,
+            wildIndustryPile: this.wildIndustryPile,
+            lastRoundEvents: this.lastRoundEvents.map(e => ({ ...e })),
+        };
+    }
+
+    // Rebuild a fully working GameState from serialize() output (an object or
+    // its JSON string). Throws GameStateError for malformed, incompatible or
+    // inconsistent data. options.validate=false skips validation (used by
+    // clone(), whose input is known-good).
+    static deserialize(data, options = {}) {
+        if (typeof data === 'string') {
+            try {
+                data = JSON.parse(data);
+            } catch (e) {
+                throw new GameStateError('Saved game is not valid JSON');
+            }
+        }
+        if (options.validate !== false) GameState.validateSaved(data);
+
+        const state = Object.create(GameState.prototype);
+        state.rng = SeededRandom.fromState(data.rng);
+        state.numPlayers = data.numPlayers;
+        state.playerNames = data.players.map(p => p.name);
+        state.era = data.era;
+        state.round = data.round;
+        state.currentPlayerIndex = data.currentPlayerIndex;
+        state.actionsThisTurn = data.actionsThisTurn;
+        state.actionsPerTurn = data.actionsPerTurn;
+        state.isFirstRound = data.isFirstRound;
+        state.gameOver = data.gameOver;
+        state.turnOrder = [...data.turnOrder];
+        state.moneySpentThisRound = {};
+        for (const [k, v] of Object.entries(data.moneySpentThisRound)) state.moneySpentThisRound[k] = v;
+
+        state.players = data.players.map((p, i) => {
+            const player = state.createPlayer(i, p.name, p.isAI, p.aiDifficulty);
+            player.money = p.money;
+            player.incomeSpace = p.incomeSpace;
+            player.vp = p.vp;
+            player.hand = p.hand.map(copyCard);
+            player.discardPile = p.discardPile.map(copyCard);
+            player.linksRemaining = { canal: p.linksRemaining.canal, rail: p.linksRemaining.rail };
+            for (const [type, used] of Object.entries(p.mat)) {
+                player.industryTiles[type].forEach((t, j) => { t.used = used[j]; });
+            }
+            return player;
+        });
+
+        const tileIn = (t) => ({
+            playerId: t.playerId,
+            type: t.type,
+            tileData: { ...INDUSTRY_DATA[t.type].find(d => d.level === t.level), type: t.type, used: true },
+            flipped: t.flipped,
+            resourceCubes: t.resourceCubes,
+        });
+        state.boardIndustries = {};
+        for (const [k, t] of Object.entries(data.boardIndustries)) state.boardIndustries[k] = tileIn(t);
+        state.breweryFarmTiles = {};
+        for (const [k, t] of Object.entries(data.breweryFarmTiles)) state.breweryFarmTiles[k] = tileIn(t);
+        state.boardLinks = {};
+        for (const [k, l] of Object.entries(data.boardLinks)) state.boardLinks[k] = { playerId: l.playerId, type: l.type };
+
+        state.coalMarket = data.coalMarket;
+        state.ironMarket = data.ironMarket;
+        state.merchantTiles = data.merchantTiles.map(m => ({ location: m.location, buys: m.buys, hasBeer: m.hasBeer }));
+        state.drawDeck = data.drawDeck.map(copyCard);
+        state.wildLocationPile = data.wildLocationPile;
+        state.wildIndustryPile = data.wildIndustryPile;
+        state.lastRoundEvents = (data.lastRoundEvents || []).map(e => ({ ...e }));
+        return state;
+    }
+
+    // A fully independent copy: no shared mutable objects, same RNG position.
+    clone() {
+        return GameState.deserialize(this.serialize(), { validate: false });
+    }
+
+    // Structural validation of serialize() output. Throws GameStateError
+    // listing what is wrong.
+    static validateSaved(data) {
+        const errors = [];
+        const err = (msg) => { if (errors.length < 10) errors.push(msg); };
+        const isInt = Number.isInteger;
+        const isObj = (o) => o !== null && typeof o === 'object' && !Array.isArray(o);
+        const intIn = (v, lo, hi) => isInt(v) && v >= lo && v <= hi;
+
+        if (!isObj(data)) throw new GameStateError('Saved game must be an object');
+        if (data.format !== GAME_STATE_FORMAT) {
+            throw new GameStateError(`Not a Brass: Birmingham saved game (format "${data.format}")`);
+        }
+        if (!isInt(data.version) || data.version < 1) throw new GameStateError(`Invalid saved game version: ${data.version}`);
+        if (data.version > GAME_STATE_VERSION) {
+            throw new GameStateError(`Saved game version ${data.version} is newer than this game supports (${GAME_STATE_VERSION})`);
+        }
+
+        const n = data.numPlayers;
+        if (![2, 3, 4].includes(n)) throw new GameStateError(`Invalid player count: ${n}`);
+        if (!Array.isArray(data.players) || data.players.length !== n) {
+            throw new GameStateError('Player list does not match the player count');
+        }
+        const isPlayer = (id) => isInt(id) && id >= 0 && id < n;
+
+        const validCard = (c, where, allowWild) => {
+            if (!isObj(c) || typeof c.type !== 'string') return err(`${where}: malformed card`);
+            if (c.type === CARD_TYPES.LOCATION) {
+                if (!CITIES[c.location]) err(`${where}: unknown location card "${c.location}"`);
+            } else if (c.type === CARD_TYPES.INDUSTRY) {
+                if (!Array.isArray(c.industryTypes) || c.industryTypes.length === 0 ||
+                    !c.industryTypes.every(t => INDUSTRY_DATA[t])) err(`${where}: invalid industry card`);
+            } else if (c.type === CARD_TYPES.WILD_LOCATION || c.type === CARD_TYPES.WILD_INDUSTRY) {
+                if (!allowWild) err(`${where}: wild card not allowed here`);
+            } else {
+                err(`${where}: unknown card type "${c.type}"`);
+            }
+        };
+        const validCards = (arr, where, allowWild) => {
+            if (!Array.isArray(arr)) return err(`${where}: must be a list of cards`);
+            arr.forEach((c, i) => validCard(c, `${where}[${i}]`, allowWild));
+        };
+
+        // Turn / era bookkeeping
+        if (data.era !== ERA.CANAL && data.era !== ERA.RAIL) err(`invalid era "${data.era}"`);
+        if (!intIn(data.round, 1, 100)) err(`invalid round ${data.round}`);
+        if (!intIn(data.currentPlayerIndex, 0, n - 1)) err(`invalid currentPlayerIndex ${data.currentPlayerIndex}`);
+        if (!intIn(data.actionsPerTurn, 1, 2)) err(`invalid actionsPerTurn ${data.actionsPerTurn}`);
+        if (!intIn(data.actionsThisTurn, 0, 2)) err(`invalid actionsThisTurn ${data.actionsThisTurn}`);
+        if (typeof data.isFirstRound !== 'boolean' || typeof data.gameOver !== 'boolean') err('invalid round flags');
+        if (!Array.isArray(data.turnOrder) ||
+            [...data.turnOrder].sort().join() !== [...Array(n).keys()].join()) err('turn order is not a permutation of the players');
+        if (!isObj(data.moneySpentThisRound) || !Object.entries(data.moneySpentThisRound)
+            .every(([k, v]) => isPlayer(Number(k)) && isInt(v) && v >= 0)) err('invalid money-spent record');
+        if (!isObj(data.rng) || !SeededRandom.isUint32(data.rng.seed) || !SeededRandom.isUint32(data.rng.state)) {
+            err('invalid random generator state');
+        }
+
+        // Players
+        data.players.forEach((p, i) => {
+            const at = `players[${i}]`;
+            if (!isObj(p)) return err(`${at}: malformed player`);
+            if (typeof p.name !== 'string') err(`${at}: invalid name`);
+            if (typeof p.isAI !== 'boolean') err(`${at}: invalid isAI`);
+            if (!['easy', 'normal', 'hard'].includes(p.aiDifficulty)) err(`${at}: invalid AI difficulty`);
+            if (!isInt(p.money) || p.money < 0) err(`${at}: invalid money ${p.money}`);
+            if (!intIn(p.incomeSpace, 0, MAX_INCOME_SPACE)) err(`${at}: invalid income space ${p.incomeSpace}`);
+            if (!isInt(p.vp) || p.vp < 0) err(`${at}: invalid VP ${p.vp}`);
+            validCards(p.hand, `${at}.hand`, true);
+            if (Array.isArray(p.hand) && p.hand.length > HAND_SIZE) err(`${at}: more than ${HAND_SIZE} cards in hand`);
+            validCards(p.discardPile, `${at}.discardPile`, false);
+            if (!isObj(p.linksRemaining) || !intIn(p.linksRemaining.canal, 0, 14) || !intIn(p.linksRemaining.rail, 0, 14)) {
+                err(`${at}: invalid link tiles`);
+            }
+            if (!isObj(p.mat)) {
+                err(`${at}: missing player mat`);
+            } else {
+                for (const [type, levels] of Object.entries(INDUSTRY_DATA)) {
+                    const count = levels.reduce((sum, l) => sum + l.count, 0);
+                    const used = p.mat[type];
+                    if (!Array.isArray(used) || used.length !== count || !used.every(u => typeof u === 'boolean')) {
+                        err(`${at}: invalid ${type} tiles on the player mat`);
+                    }
+                }
+            }
+        });
+
+        // Board
+        const validTile = (t, at, allowedTypes) => {
+            if (!isObj(t)) return err(`${at}: malformed tile`);
+            if (!isPlayer(t.playerId)) err(`${at}: invalid owner`);
+            if (!allowedTypes.includes(t.type)) return err(`${at}: ${t.type} not allowed here`);
+            if (!INDUSTRY_DATA[t.type].some(d => d.level === t.level)) err(`${at}: invalid level ${t.level}`);
+            if (typeof t.flipped !== 'boolean') err(`${at}: invalid flipped flag`);
+            if (!isInt(t.resourceCubes) || t.resourceCubes < 0) err(`${at}: invalid resource cubes`);
+        };
+        if (!isObj(data.boardIndustries)) {
+            err('missing board industries');
+        } else {
+            for (const [key, t] of Object.entries(data.boardIndustries)) {
+                const [cityId, slot, extra] = key.split('_');
+                const slots = CITIES[cityId] && CITIES[cityId].slots;
+                if (!slots || extra !== undefined || !isInt(Number(slot)) || !slots[Number(slot)]) {
+                    err(`unknown industry space "${key}"`);
+                    continue;
+                }
+                validTile(t, key, slots[Number(slot)]);
+            }
+        }
+        if (!isObj(data.breweryFarmTiles)) {
+            err('missing farm breweries');
+        } else {
+            for (const [key, t] of Object.entries(data.breweryFarmTiles)) {
+                if (!BREWERY_FARMS[key]) err(`unknown farm brewery "${key}"`);
+                else validTile(t, key, [INDUSTRY_TYPES.BREWERY]);
+            }
+        }
+        if (!isObj(data.boardLinks)) {
+            err('missing links');
+        } else {
+            for (const [id, l] of Object.entries(data.boardLinks)) {
+                const conn = CONNECTIONS.find(c => c.id === id);
+                if (!conn) { err(`unknown connection "${id}"`); continue; }
+                if (!isObj(l) || !isPlayer(l.playerId) || (l.type !== 'canal' && l.type !== 'rail') || !conn[l.type]) {
+                    err(`invalid link on "${id}"`);
+                }
+            }
+        }
+
+        // Markets, merchants, cards
+        if (!intIn(data.coalMarket, 0, COAL_MARKET_PRICES.length)) err(`invalid coal market ${data.coalMarket}`);
+        if (!intIn(data.ironMarket, 0, IRON_MARKET_PRICES.length)) err(`invalid iron market ${data.ironMarket}`);
+        if (!Array.isArray(data.merchantTiles) || !data.merchantTiles.every(m => isObj(m) && MERCHANTS[m.location] &&
+            (m.buys === 'any' || m.buys === 'blank' || isSellableIndustry(m.buys)) && typeof m.hasBeer === 'boolean')) {
+            err('invalid merchant tiles');
+        }
+        validCards(data.drawDeck, 'drawDeck', false);
+        if (!intIn(data.wildLocationPile, 0, 4) || !intIn(data.wildIndustryPile, 0, 4)) err('invalid wild card piles');
+        if (data.lastRoundEvents !== undefined && !Array.isArray(data.lastRoundEvents)) err('invalid round events');
+
+        if (errors.length) throw new GameStateError(`Invalid saved game: ${errors.join('; ')}`);
+    }
+
+    // What one player may see (viewerId), or what everyone may see (null):
+    // other players' hands, the draw deck, face-down discards and the random
+    // generator are reduced to counts / placeholders. Not restorable.
+    getPlayerView(viewerId = null) {
+        const full = this.serialize();
+        const hiddenCard = (c) => (c.faceDown ? { faceDown: true } : c);
+        return {
+            ...full,
+            format: GAME_STATE_VIEW_FORMAT,
+            viewerId,
+            rng: undefined,
+            drawDeck: undefined,
+            drawDeckCount: full.drawDeck.length,
+            players: full.players.map((p, i) => ({
+                ...p,
+                hand: i === viewerId ? p.hand : undefined,
+                handCount: p.hand.length,
+                discardPile: p.discardPile.map(hiddenCard),
+            })),
+        };
     }
 
     // ========================================================================
