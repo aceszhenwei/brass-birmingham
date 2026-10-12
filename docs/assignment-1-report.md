@@ -153,11 +153,26 @@ action** the driver checks these invariants:
 | Run | 2 players | 3 players | 4 players | Problems |
 |---|---|---|---|---|
 | `--games 100` (seeds 1–100) | 100/100, 10+10 rounds | 100/100, 9+9 rounds | 100/100, 8+8 rounds | **0** |
-| `--games 300 --seed 5001` | SIM300_2 | SIM300_3 | SIM300_4 | SIM300_TOTAL |
-| Original code, same driver, `--games 100` | ORIG_2 | ORIG_3 | ORIG_4 | ORIG_TOTAL |
+| `--games 300 --seed 5001` (seeds 5001–5300) | 300/300, 10+10 rounds | 300/300, 9+9 rounds | 300/300, 8+8 rounds | **0** |
+| *Original code* (`2c1fe1f`), same driver, `--games 100` | 100/100 | **99/100** | 100/100 | **1**: A1, see below |
 
-Average game length with the fixed code (100-game run): 78 / 105 / 124 actions,
-with average winning VP of 51 / 59 / 63.
+**1,200 games with the fixed code, zero problems.** Every game terminated with
+exactly 10/9/8 rounds in each era, no AI action failed, no exception was
+thrown, and every invariant held after every action.
+
+- **Game length (fixed code, 100-game run):** 78 / 105 / 124 actions per game at 2 / 3 / 4 players.
+- **Average winning VP:** 51 / 59 / 63.
+
+**Comparison with the original code.** Running the old code through the same
+strict driver reproduces A1 on its own: in 3-player seed 3076 the AI submits a
+Pottery sale that `getValidSellTargets` accepted, and `executeSell` answers
+*"Nothing could be sold"*. In the browser this is exactly the AI freeze
+reported as A2.
+
+**No regressions in mechanics that already worked.** The fixed code plays the
+same games as the old code:
+- game lengths are identical;
+- action mix and VP differ only marginally — for example, the AI no longer submits sell plans that cannot be completed.
 
 **Real browser check.** A Playwright run of `index.html` (1 human + 2 AI seats):
 - the human passed for 17 turns while the AIs played through Canal round 9;
