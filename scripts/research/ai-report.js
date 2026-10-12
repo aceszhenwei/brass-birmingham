@@ -75,7 +75,7 @@ if (threeway.length) {
     console.log(`## Three-way games (3 players, one of each difficulty, all six seatings; ${threeway.length} games)\n`);
     console.log('| Difficulty | Win share [95% CI] | Mean VP | Mean rank |');
     console.log('|---|---|---|---|');
-    for (const level of ['easy', 'normal', 'hard']) {
+    for (const level of [...new Set(threeway.flatMap(g => g.seats))]) {
         const wins = sum(threeway.map(g => g.final[g.seats.indexOf(level)].win));
         const vp = threeway.map(g => g.final[g.seats.indexOf(level)].vp);
         const rank = threeway.map(g => g.final[g.seats.indexOf(level)].rank);

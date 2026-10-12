@@ -12,8 +12,9 @@
 //      the clone (replaying the original's decisions) and the restored save
 //      (AI choosing with its restored random stream) must finish identically.
 //   3. Unless --no-a1: replay the same seed with the Assignment 1 randomness
-//      layout and compare it to test/fixtures/assignment1-baseline.json
-//      (games recorded from the Assignment 1 code).
+//      layout and the legacy AI baseline (AIPlayer.LEGACY_A5), and compare it
+//      to test/fixtures/assignment1-baseline.json (games recorded from the
+//      Assignment 1 code).
 // Then (--mixed N, default 30 per player count) play N games where the seats
 // have DIFFERENT difficulties (easy / normal / hard / normal), and
 // (--random N, default 20 per player count) play N games choosing at
@@ -75,7 +76,7 @@ for (const players of PLAYERS) {
 
             const a1 = a1BySeed.get(seed);
             if (COMPARE_A1 && a1 && a1.difficulty === difficulty) {
-                const r = playGame({ players, seed, difficulty, sharedRng: true, E });
+                const r = playGame({ players, seed, difficulty, sharedRng: true, aiOptions: E.AIPlayer.LEGACY_A5, E });
                 a1Compared++;
                 if (fingerprint(r.state, { steps: r.steps, actions: r.actions }) !== a1.fingerprint) {
                     a1Mismatches.push(`seed ${seed}`);

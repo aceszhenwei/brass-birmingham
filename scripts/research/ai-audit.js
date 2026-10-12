@@ -2,7 +2,10 @@
 // Assignment 5: legality, fairness and decision-coverage probe for the
 // existing AI (docs/research/ai-baseline-audit.md, section 2).
 //
-//   node scripts/research/ai-audit.js [--games 10] [--players 2,3,4]
+//   node scripts/research/ai-audit.js [--games 10] [--players 2,3,4] [--baseline a5]
+//
+// By default it probes the current AI; --baseline a5 probes the Assignment 5
+// baseline (AIPlayer.LEGACY_A5), which reproduces the Assignment 5 tables.
 //
 // Plays all-AI games at each difficulty (seeds 1000*players + i, the same
 // seeds as scripts/simulate.js) and, at EVERY AI decision, checks:
@@ -15,6 +18,9 @@
 //                merchant, free develop) to the engine's default
 //   double rail  in the Rail Era, a two-link Network was legal when the AI
 //                built a single link (the AI never plans one)
+//   corrections  (current AI only) the decision changes if the AI instead
+//                reads the real state (information: 'full') or uses the
+//                Assignment 5 rounds estimate (rounds: 'deck-estimate')
 // Both what-if decisions use a copy of the AI's random stream, so they see
 // the same noise as the real decision. The real game is never altered.
 
@@ -30,6 +36,7 @@ function arg(name, fallback) {
 const GAMES = Number(arg('games', 10));
 const PLAYERS = String(arg('players', '2,3,4')).split(',').map(Number);
 const E = loadEngine();
+const OPTIONS = arg('baseline', null) === 'a5' ? E.AIPlayer.LEGACY_A5 : null;
 
 function probe(players, difficulty, seed, totals, examples) {
     const names = ['A', 'B', 'C', 'D'].slice(0, players);
@@ -45,7 +52,7 @@ function probe(players, difficulty, seed, totals, examples) {
             continue;
         }
         const id = d.playerId;
-        const choose = (rng) => E.AIPlayer.chooseAction(state, logic, id, difficulty, rng);
+        const choose = (rng) => E.AIPlayer.chooseAction(state, logic, id, difficulty, rng, OPTIONS);
 
         // What-if decisions on copies of the AI's random stream
         const withHands = withOpponentHands(E, state, id, 'resample', viewRng, () => choose(aiRng.clone()));
@@ -53,6 +60,14 @@ function probe(players, difficulty, seed, totals, examples) {
         state.drawDeck = viewRng.shuffle([...savedDeck]);
         let withDeck;
         try { withDeck = choose(aiRng.clone()); } finally { state.drawDeck = savedDeck; }
+
+        // How often each Assignment 6 correction changes the decision here
+        if (!OPTIONS) {
+            if (key(E.AIPlayer.chooseAction(state, logic, id, difficulty, aiRng.clone(), { information: 'full' })) !==
+                key(choose(aiRng.clone()))) totals.infoChanged++;
+            if (key(E.AIPlayer.chooseAction(state, logic, id, difficulty, aiRng.clone(), { rounds: 'deck-estimate' })) !==
+                key(choose(aiRng.clone()))) totals.roundsChanged++;
+        }
 
         // The real decision
         const before = JSON.stringify(state.serialize());
@@ -90,20 +105,21 @@ function probe(players, difficulty, seed, totals, examples) {
 }
 
 const started = Date.now();
-console.log('| Players | Difficulty | Decisions | Illegal | State changed | Changes with resampled opponent hands | Changes with reshuffled deck | Moves leaving a choice to the engine | Rail networks with a double link legal |');
-console.log('|---|---|---|---|---|---|---|---|---|');
+const extra = OPTIONS ? '' : ' Changed by the information correction | Changed by the rounds correction |';
+console.log('| Players | Difficulty | Decisions | Illegal | State changed | Changes with resampled opponent hands | Changes with reshuffled deck | Moves leaving a choice to the engine | Rail networks with a double link legal |' + extra);
+console.log('|---|---|---|---|---|---|---|---|---|' + (OPTIONS ? '' : '---|---|'));
 const allExamples = {};
 for (const players of PLAYERS) {
     for (const difficulty of ['easy', 'normal', 'hard']) {
         const totals = { decisions: 0, illegal: 0, impure: 0, handSensitive: 0, deckSensitive: 0,
-            movesWithChoice: 0, choices: {}, railNetwork: 0, doubleRailLegal: 0 };
+            movesWithChoice: 0, choices: {}, railNetwork: 0, doubleRailLegal: 0, infoChanged: 0, roundsChanged: 0 };
         const examples = [];
         for (let i = 1; i <= GAMES; i++) probe(players, difficulty, 1000 * players + i, totals, examples);
         const pct = (n) => `${n} (${(100 * n / totals.decisions).toFixed(1)}%)`;
         const kinds = Object.entries(totals.choices).map(([k, n]) => `${k} ${n}`).join(', ');
         console.log(`| ${players} | ${difficulty} | ${totals.decisions} | ${totals.illegal} | ${totals.impure} | ` +
             `${pct(totals.handSensitive)} | ${pct(totals.deckSensitive)} | ${pct(totals.movesWithChoice)}${kinds ? ` (${kinds})` : ''} | ` +
-            `${totals.doubleRailLegal} of ${totals.railNetwork} |`);
+            `${totals.doubleRailLegal} of ${totals.railNetwork} |` + (OPTIONS ? '' : ` ${pct(totals.infoChanged)} | ${pct(totals.roundsChanged)} |`));
         if (examples.length) allExamples[`${players}p ${difficulty}`] = examples;
     }
 }

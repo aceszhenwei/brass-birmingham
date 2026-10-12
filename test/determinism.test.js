@@ -115,11 +115,13 @@ test('the Rail Era reshuffle is drawn from the game RNG (deterministic per seed)
 
 // Equivalent initial conditions to Assignment 1: same seeds and, with the AI
 // sharing the game's stream (as the A1 harness's single seeded Math.random
-// did), the same random draws in the same order.
+// did), the same random draws in the same order. The recorded games were
+// played by the AI as it was before Assignment 6, preserved as
+// AIPlayer.LEGACY_A5; this pins that baseline (and the engine) exactly.
 for (const players of [2, 3, 4]) {
-    test(`${players} players: replays Assignment 1 games bit-for-bit (${GAMES} games)`, () => {
+    test(`${players} players: the legacy AI baseline replays Assignment 1 games bit-for-bit (${GAMES} games)`, () => {
         for (const g of baseline.games[players].slice(0, GAMES)) {
-            const r = playGame({ players, seed: g.seed, difficulty: g.difficulty, sharedRng: true, E });
+            const r = playGame({ players, seed: g.seed, difficulty: g.difficulty, sharedRng: true, aiOptions: E.AIPlayer.LEGACY_A5, E });
             assert.equal(fingerprint(r.state, { steps: r.steps, actions: r.actions }), g.fingerprint,
                 `seed ${g.seed}: differs from Assignment 1 (A1 VP ${g.vp}, now ${plain(r.vp)})`);
         }

@@ -53,10 +53,12 @@ function withOpponentHands(E, state, playerId, mode, rng, fn) {
 // Policies: (ctx, decision) -> move
 // ---------------------------------------------------------------------------
 
-function aiPolicy(level, handMode = null) {
+// variant: AIPlayer.chooseAction options (null = the current AI)
+function aiPolicy(level, variant = null, handMode = null) {
     return (ctx, d) => {
         const { E, state, logic, aiRng, viewRng } = ctx;
-        const choose = () => E.AIPlayer.chooseAction(state, logic, d.playerId, level, aiRng);
+        const opts = typeof variant === 'function' ? variant(E) : variant;
+        const choose = () => E.AIPlayer.chooseAction(state, logic, d.playerId, level, aiRng, opts);
         const decision = handMode ? withOpponentHands(E, state, d.playerId, handMode, viewRng, choose) : choose();
         return logic.moveFromDecision(decision);
     };
@@ -72,18 +74,29 @@ function randomPolicy(ctx, d) {
     return ofType[ctx.viewRng.int(ofType.length)];
 }
 
-const POLICIES = {
-    easy: aiPolicy('easy'),
-    normal: aiPolicy('normal'),
-    hard: aiPolicy('hard'),
-    // Hard with every opponent hand hidden: its denial bonus sees no cards,
-    // so this is the Hard heuristic WITHOUT the hidden information
-    'hard-blind': aiPolicy('hard', 'empty'),
-    // Hard shown a plausible (resampled) opponent hand instead of the real
-    // one: what a fair Hard could at best do with the same bonus
-    'hard-fair': aiPolicy('hard', 'resample'),
-    random: randomPolicy,
-};
+// AI variants (Assignment 6). For each level:
+//   <level>           the current AI (fair information, engine rounds)
+//   <level>-a5        the Assignment 5 baseline, AIPlayer.LEGACY_A5: reads
+//                     opponents' hands (Hard) and uses the old rounds estimate
+//   <level>-fairinfo  the baseline with ONLY the information correction
+//   <level>-rounds    the baseline with ONLY the rounds correction
+const LEGACY = (E) => E.AIPlayer.LEGACY_A5;
+const FAIR_INFO_ONLY = { information: 'player', rounds: 'deck-estimate' };
+const ROUNDS_ONLY = { information: 'full', rounds: 'engine' };
+
+const POLICIES = { random: randomPolicy };
+for (const level of ['easy', 'normal', 'hard']) {
+    POLICIES[level] = aiPolicy(level);
+    POLICIES[`${level}-a5`] = aiPolicy(level, LEGACY);
+    POLICIES[`${level}-fairinfo`] = aiPolicy(level, FAIR_INFO_ONLY);
+    POLICIES[`${level}-rounds`] = aiPolicy(level, ROUNDS_ONLY);
+}
+// Assignment 5 ablations of the baseline Hard (what it is SHOWN changes, not
+// its code): every opponent hand hidden, so its denial bonus sees no cards...
+POLICIES['hard-blind'] = aiPolicy('hard', LEGACY, 'empty');
+// ...or a plausible (resampled) opponent hand instead of the real one
+POLICIES['hard-fair'] = aiPolicy('hard', LEGACY, 'resample');
+const levelOf = (policy) => (['easy', 'normal', 'hard'].includes(policy.split('-')[0]) ? policy.split('-')[0] : 'hard');
 
 // ---------------------------------------------------------------------------
 // Statistics
@@ -204,7 +217,8 @@ function recordMove(E, state, logic, playerId, move, s, { detailed }) {
 // final, ranking, moves }.
 function playMatch(E, { players, seed, seats, detailed = true, checkInvariantsEveryMove = false, trace = null }) {
     const names = ['A', 'B', 'C', 'D'].slice(0, players);
-    const aiConfig = seats.map(p => ({ isAI: true, difficulty: ['easy', 'normal', 'hard'].includes(p) ? p : 'hard' }));
+    if (seats.some(p => !POLICIES[p])) throw new Error(`unknown policy in ${seats.join(',')}`);
+    const aiConfig = seats.map(p => ({ isAI: true, difficulty: levelOf(p) }));
     const state = new E.GameState(players, names, aiConfig, { seed });
     const logic = new E.GameLogic(state);
     const ctx = {

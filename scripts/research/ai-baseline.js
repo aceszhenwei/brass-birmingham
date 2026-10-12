@@ -10,10 +10,12 @@
 //             BBA, BAB, ABB; 4p: the six arrangements of AABB).
 //   mirror    [--levels easy,normal,hard]  Every seat the same difficulty,
 //             with the detailed per-decision statistics.
-//   threeway  3 players, one of each difficulty, all six seatings.
-// Policies: easy, normal, hard (the existing AI, unchanged), hard-blind and
-// hard-fair (Hard shown no / resampled opponent hands), random (uniform
-// legal moves). See scripts/research/harness.js.
+//   threeway  [--levels easy,normal,hard]  3 players, one seat per level,
+//             all six seatings.
+// Policies: easy, normal, hard (the current AI); <level>-a5 (the Assignment 5
+// baseline), <level>-fairinfo and <level>-rounds (one correction each);
+// hard-blind and hard-fair (the baseline Hard shown no / resampled opponent
+// hands); random (uniform legal moves). See scripts/research/harness.js.
 //
 // Game seeds are 200000 + 1000 * players + i (i = 1..N), distinct from the
 // seeds scripts/simulate.js and the tests use. Raw per-game results are
@@ -34,7 +36,10 @@ function arg(name, fallback) {
 }
 const PLAYERS = String(arg('players', '2,3,4')).split(',').map(Number);
 const SEEDS = Number(arg('seeds', experiment === 'mirror' ? 100 : 50));
-const DEFAULT_PAIRS = 'easy:normal,normal:hard,easy:hard,hard-blind:hard,hard-fair:hard,hard-blind:normal,random:easy';
+// Default: the Assignment 6 comparisons (corrections in isolation and
+// together against the Assignment 5 baseline, then the corrected ladder)
+const DEFAULT_PAIRS = 'hard-fairinfo:hard-a5,easy-rounds:easy-a5,normal-rounds:normal-a5,hard-rounds:hard-a5,' +
+    'easy:easy-a5,normal:normal-a5,hard:hard-a5,easy:normal,normal:hard,easy:hard';
 const PAIRS = String(arg('pairs', DEFAULT_PAIRS)).split(',').map(p => p.split(':'));
 const LEVELS = String(arg('levels', 'easy,normal,hard')).split(',');
 const OUT = arg('out', path.join('research-results', `${experiment}-${PLAYERS.join('')}.json`));
@@ -87,7 +92,7 @@ for (const players of PLAYERS) {
     } else if (experiment === 'threeway') {
         if (players !== 3) continue;
         for (let i = 1; i <= SEEDS; i++) {
-            for (const seats of arrangements(['easy', 'normal', 'hard'])) run('threeway', 3, seedFor(3, i), seats, false);
+            for (const seats of arrangements(LEVELS.slice(0, 3))) run('threeway', 3, seedFor(3, i), seats, false);
         }
     } else {
         console.error('usage: ai-baseline.js matchups|mirror|threeway [--players 2,3,4] [--seeds N] [--out file]');
