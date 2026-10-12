@@ -43,6 +43,12 @@ beyond the current turn are discounted by 0.6.
 - It plays production Normal (2 players: 150 seeds; 3 and 4 players: 60 each), and its depth-1 control.
 - **Generalisation:** it plays production Hard (2 players: 100 seeds; 3 and 4 players: 40 each).
 
+**Amendments after exploration** (recorded before any held-out game).
+- The timing probe showed depth 3 over the time budget: 66–77 ms mean, and 150–176 ms at the 95th percentile.
+- `p3-state` (the plan's candidate) is still validated as written.
+- `p2-state`, the best depth-2 planner, is also validated on the same seeds and with the same opponents (`p2-state` against its control, and against Hard).
+- A bounded depth-3 planner, `p3-state-b` (4 first-level and 2 second-level candidates), is explored on the exploration seeds only, against production Normal and against `p2-state`. It is a feasibility diagnostic.
+
 ## Success criteria (all on the held-out seeds)
 
 A planner is judged **worth pursuing** only if:

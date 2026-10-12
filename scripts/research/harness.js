@@ -171,6 +171,9 @@ const PLANNER_CONFIGS = {
     'p2-sum-g0': { depth: 2, evaluate: 'sum', gamma: 0 },
     'p2-sum-g1': { depth: 2, evaluate: 'sum', gamma: 1 },
     'p2-sum-w3': { depth: 2, evaluate: 'sum', width: 3 },
+    // Added after exploration, when depth 3 exceeded the time budget: a
+    // bounded depth-3 search (4 first-level and 2 second-level candidates)
+    'p3-state-b': { depth: 3, evaluate: 'state', width: 4, width2: 2 },
 };
 function plannerPolicy(level, name, cfg) {
     return (ctx, d) => {
