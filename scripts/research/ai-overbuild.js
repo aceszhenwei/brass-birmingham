@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Assignment 8: how and why the AI overbuilds its own industries.
 //
-//   node scripts/research/ai-overbuild.js [--players 3] [--seeds 50] [--levels normal] [--overbuild a6] [--sell a8] [--examples 2]
+//   node scripts/research/ai-overbuild.js [--players 3] [--seeds 50] [--levels normal] [--overbuild a6] [--sell a8] [--legacy a9] [--examples 2]
 //
 // Plays mirror games (every seat the same level; seeds 200000 + 1000 *
 // players + i as in ai-baseline.js) with the AI's diagnostics on, and for
@@ -39,6 +39,9 @@ const VARIANT = arg('overbuild', null);
 const SELL = arg('sell', null);
 const EXAMPLES = Number(arg('examples', 2));
 const E = loadEngine();
+// --legacy a9: the AI before Assignment 10 (AIPlayer.LEGACY_A9: single links,
+// Develop until the end), which the earlier reports measured
+const LEGACY_PINS = arg('legacy', null) === 'a9' ? E.AIPlayer.LEGACY_A9 : {};
 const A = E.ACTIONS;
 
 const pct = (a, b) => `${a} of ${b} (${b ? (100 * a / b).toFixed(0) : 0}%)`;
@@ -57,7 +60,7 @@ for (const level of LEVELS) {
         const state = new E.GameState(PLAYERS, names, names.map(() => ({ isAI: true, difficulty: level })), { seed });
         const logic = new E.GameLogic(state);
         const aiRng = new E.SeededRandom(aiSeedFor(seed));
-        const opts = { explain: true, ...(VARIANT ? { overbuild: VARIANT } : {}), ...(SELL ? { sell: SELL } : {}) };
+        const opts = { explain: true, ...LEGACY_PINS, ...(VARIANT ? { overbuild: VARIANT } : {}), ...(SELL ? { sell: SELL } : {}) };
         const pending = [];    // builds waiting for their era's end: { key, rec | null, era }
 
         // At each era end, settle what became of the tiles built in it

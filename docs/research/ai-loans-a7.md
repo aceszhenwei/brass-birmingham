@@ -303,14 +303,15 @@ git-ignored `research-a7/` folder.
 
 Since Assignment 8 changed the production AI's overbuild scoring, the AI of
 this report is `AIPlayer.LEGACY_A6`. The `+` policies are pinned to it, and
-`ai-loans.js` takes `--overbuild a6 --sell a8` (`--sell a8` since Assignment 9
-changed selling). The commands below reproduce this
+`ai-loans.js` takes `--overbuild a6 --sell a8 --legacy a9` (`--sell a8` since
+Assignment 9 changed selling, `--legacy a9` since Assignment 10 changed
+networking and late development). The commands below reproduce this
 report's numbers exactly.
 
 ```
 # Investigation (about 1-2 min per player count)
-node scripts/research/ai-loans.js --players 3 --seeds 100 --levels easy,normal,hard --overbuild a6 --sell a8     # and 2, 4
-node scripts/research/ai-loans.js --players 3 --seeds 100 --levels normal --loan enabling --overbuild a6 --sell a8   # each candidate
+node scripts/research/ai-loans.js --players 3 --seeds 100 --levels easy,normal,hard --overbuild a6 --sell a8 --legacy a9     # and 2, 4
+node scripts/research/ai-loans.js --players 3 --seeds 100 --levels normal --loan enabling --overbuild a6 --sell a8 --legacy a9   # each candidate
 node scripts/research/ai-trace.js --players 3 --seed 203004 --seats normal~a6,normal~a6,normal~a6 --player 1
 
 # Exploration (exploration seeds)

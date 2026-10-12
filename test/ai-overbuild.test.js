@@ -81,7 +81,7 @@ test("the default overbuild scoring is 'opportunity', LEGACY_A6 is 'a6', and bui
         const key = (opts) => JSON.stringify(logic.moveFromDecision(
             E.AIPlayer.chooseAction(state, logic, d.playerId, 'hard', aiRng.clone(), opts)));
         assert.equal(key({ overbuild: 'opportunity' }), key(null));
-        assert.equal(key(E.AIPlayer.LEGACY_A6), key({ overbuild: 'a6', sell: 'a8' }));
+        assert.equal(key(E.AIPlayer.LEGACY_A6), key({ overbuild: 'a6', sell: 'a8', network: 'single', develop: 'a8' }));
         assert.equal(key({ explain: true }), key(null));
         assert.ok(logic.play(d.playerId, logic.moveFromDecision(E.AIPlayer.chooseAction(state, logic, d.playerId, 'hard', aiRng))).success);
     }

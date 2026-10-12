@@ -300,12 +300,13 @@ git-ignored `research-a8/` folder.
 Since Assignment 9 the production AI sells differently. The `<level>~…`
 policies below are pinned to the selling of their time, so they reproduce
 unchanged. Commands that ran the production AI of Assignment 8 now need
-`--sell a8` (or `--baseline a8`), as shown.
+`--sell a8 --legacy a9` (or `--baseline a8`), as shown (`--legacy a9` since
+Assignment 10 changed networking and late development).
 
 ```
 # Investigation (about 20 s per level and player count)
-node scripts/research/ai-overbuild.js --players 3 --seeds 100 --levels easy,normal,hard --overbuild a6 --sell a8   # and 2, 4
-node scripts/research/ai-overbuild.js --players 3 --seeds 100 --levels normal --overbuild opportunity --sell a8   # and 2, 4
+node scripts/research/ai-overbuild.js --players 3 --seeds 100 --levels easy,normal,hard --overbuild a6 --sell a8 --legacy a9   # and 2, 4
+node scripts/research/ai-overbuild.js --players 3 --seeds 100 --levels normal --overbuild opportunity --sell a8 --legacy a9   # and 2, 4
 
 # Exploration
 P=normal~opportunity:normal~a6,normal~opportunity-unflipped:normal~a6,normal~no-unflipped:normal~a6
@@ -329,7 +330,7 @@ node scripts/research/ai-baseline.js matchups --players 2 --seeds 100 --base-see
 node scripts/research/ai-criteria.js research-a8/explore-*.json        # and validate-*, general-*
 node scripts/research/ai-compare.js research-a8/mirror-*.json \
     --pairs normal~opportunity:normal~a6,normal~opportunity-unflipped:normal~a6,normal~no-unflipped:normal~a6
-node scripts/research/ai-loans.js --players 3 --seeds 100 --levels normal --sell a8   # loans after the change; and 2, 4
+node scripts/research/ai-loans.js --players 3 --seeds 100 --levels normal --sell a8 --legacy a9   # loans after the change; and 2, 4
 node scripts/research/ai-audit.js --games 10 --baseline a8                      # the Assignment 8 production AI
 
 # Fixtures (re-record only for an intended AI change)

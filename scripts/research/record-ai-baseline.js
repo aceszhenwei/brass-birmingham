@@ -5,11 +5,13 @@
 //
 //   node scripts/research/record-ai-baseline.js --preset a6        # test/fixtures/assignment6-baseline.json
 //   node scripts/research/record-ai-baseline.js --preset a8        # test/fixtures/assignment8-baseline.json
-//   node scripts/research/record-ai-baseline.js --preset current   # test/fixtures/assignment9-baseline.json
+//   node scripts/research/record-ai-baseline.js --preset a9        # test/fixtures/assignment9-baseline.json
+//   node scripts/research/record-ai-baseline.js --preset current   # test/fixtures/assignment10-baseline.json
 //
 // Presets: a6 = the AI of Assignments 6-7 (AIPlayer.LEGACY_A6); a8 = the AI of
-// Assignment 8 (AIPlayer.LEGACY_A8); current = the production AI (since
-// Assignment 9). Re-record a fixture only for an intended change to that AI.
+// Assignment 8 (AIPlayer.LEGACY_A8); a9 = the AI of Assignment 9
+// (AIPlayer.LEGACY_A9); current = the production AI (since Assignment 10).
+// Re-record a fixture only for an intended change to that AI.
 // Games: 10 per player count, seeds 6000 + 1000 * players + i, difficulty
 // rotating easy / normal / hard by seed, each AI with its own seeded stream
 // (as the UI plays).
@@ -30,10 +32,12 @@ const PRESETS = {
         from: 'the AI of Assignments 6-7 (AIPlayer.LEGACY_A6; production until Assignment 8)' },
     a8: { options: E.AIPlayer.LEGACY_A8, file: 'assignment8-baseline.json',
         from: 'the production AI since Assignment 8' },
-    current: { options: null, file: 'assignment9-baseline.json', from: 'the production AI since Assignment 9' },
+    a9: { options: E.AIPlayer.LEGACY_A9, file: 'assignment9-baseline.json',
+        from: 'the production AI since Assignment 9' },
+    current: { options: null, file: 'assignment10-baseline.json', from: 'the production AI since Assignment 10' },
 };
 const p = PRESETS[preset];
-if (!p) { console.error('usage: record-ai-baseline.js --preset a6|a8|current'); process.exit(2); }
+if (!p) { console.error('usage: record-ai-baseline.js --preset a6|a8|a9|current'); process.exit(2); }
 
 const games = {};
 for (const players of [2, 3, 4]) {

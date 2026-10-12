@@ -55,13 +55,20 @@ function withOpponentHands(E, state, playerId, mode, rng, fn) {
 
 // variant: AIPlayer.chooseAction options (null = the current AI)
 function aiPolicy(level, variant = null, handMode = null) {
-    return (ctx, d) => {
+    const policy = (ctx, d) => {
         const { E, state, logic, aiRng, viewRng } = ctx;
         const opts = typeof variant === 'function' ? variant(E) : variant;
         const choose = () => E.AIPlayer.chooseAction(state, logic, d.playerId, level, aiRng, opts);
         const decision = handMode ? withOpponentHands(E, state, d.playerId, handMode, viewRng, choose) : choose();
         return logic.moveFromDecision(decision);
     };
+    // Income shortfalls (AIPlayer.chooseShortfall; the engine's default
+    // unless the variant sets options.shortfall)
+    policy.shortfall = (ctx, d) => {
+        const opts = typeof variant === 'function' ? variant(ctx.E) : variant;
+        return ctx.E.AIPlayer.chooseShortfall(ctx.state, ctx.logic, d.playerId, opts);
+    };
+    return policy;
 }
 
 // Uniform over move TYPES, then uniform over the legal moves of that type
@@ -78,14 +85,16 @@ function randomPolicy(ctx, d) {
 //   <level>           the current production AI
 //   <level>~a6        the AI of Assignments 6-7 (AIPlayer.LEGACY_A6)
 //   <level>^a8        the AI of Assignment 8 (AIPlayer.LEGACY_A8; same as ~opportunity)
+//   <level>%a9        the AI of Assignment 9 (AIPlayer.LEGACY_A9)
 //   <level>-a5        the Assignment 5 baseline, AIPlayer.LEGACY_A5: reads
 //                     opponents' hands (Hard) and uses the old rounds estimate
 //   <level>-fairinfo  the baseline with ONLY the information correction
 //   <level>-rounds    the baseline with ONLY the rounds correction
 const LEGACY = (E) => E.AIPlayer.LEGACY_A5;
 // (Assignment 6 variants keep the overbuild scoring of their time)
-const FAIR_INFO_ONLY = { information: 'player', rounds: 'deck-estimate', overbuild: 'a6', sell: 'a8' };
-const ROUNDS_ONLY = { information: 'full', rounds: 'engine', overbuild: 'a6', sell: 'a8' };
+const PRE_A10 = { network: 'single', develop: 'a8' };   // AIPlayer.LEGACY_A9: before Assignment 10
+const FAIR_INFO_ONLY = { information: 'player', rounds: 'deck-estimate', overbuild: 'a6', sell: 'a8', ...PRE_A10 };
+const ROUNDS_ONLY = { information: 'full', rounds: 'engine', overbuild: 'a6', sell: 'a8', ...PRE_A10 };
 
 const POLICIES = { random: randomPolicy };
 for (const level of ['easy', 'normal', 'hard']) {
@@ -105,7 +114,7 @@ POLICIES['hard-fair'] = aiPolicy('hard', LEGACY, 'resample');
 // and +never (a no-loan ablation)
 for (const level of ['easy', 'normal', 'hard']) {
     for (const loan of ['a6', 'cashflow', 'enabling', 'cashflow+enabling', 'never']) {
-        POLICIES[`${level}+${loan}`] = aiPolicy(level, { loan, overbuild: 'a6', sell: 'a8' });
+        POLICIES[`${level}+${loan}`] = aiPolicy(level, { loan, overbuild: 'a6', sell: 'a8', ...PRE_A10 });
     }
 }
 // Overbuild-scoring variants (Assignment 8, options.overbuild): <level>~a6
@@ -113,20 +122,38 @@ for (const level of ['easy', 'normal', 'hard']) {
 // since Assignment 8), ~opportunity-unflipped, ~no-unflipped
 for (const level of ['easy', 'normal', 'hard']) {
     for (const overbuild of ['a6', 'opportunity', 'opportunity-unflipped', 'no-unflipped']) {
-        POLICIES[`${level}~${overbuild}`] = aiPolicy(level, { overbuild, sell: 'a8' });   // the AI of that time
+        POLICIES[`${level}~${overbuild}`] = aiPolicy(level, { overbuild, sell: 'a8', ...PRE_A10 });   // the AI of that time
     }
 }
 // Investment variants (Assignment 9, options.develop / options.sell), on the
 // Assignment 8 AI: <level>^develop-horizon, ^sell-calibrated (adopted: the
 // production AI since Assignment 9), ^sell-connect
 for (const level of ['easy', 'normal', 'hard']) {
-    POLICIES[`${level}^a8`] = aiPolicy(level, { sell: 'a8' });
-    POLICIES[`${level}^develop-horizon`] = aiPolicy(level, { develop: 'horizon', sell: 'a8' });
-    POLICIES[`${level}^sell-calibrated`] = aiPolicy(level, { sell: 'calibrated' });
-    POLICIES[`${level}^sell-connect`] = aiPolicy(level, { sell: 'connect' });
+    POLICIES[`${level}^a8`] = aiPolicy(level, { sell: 'a8', ...PRE_A10 });
+    POLICIES[`${level}^develop-horizon`] = aiPolicy(level, { ...PRE_A10, develop: 'horizon', sell: 'a8' });
+    POLICIES[`${level}^sell-calibrated`] = aiPolicy(level, { sell: 'calibrated', ...PRE_A10 });
+    POLICIES[`${level}^sell-connect`] = aiPolicy(level, { sell: 'connect', ...PRE_A10 });
+}
+// Assignment 10 variants (options.network / cards / sourcing / shortfall /
+// develop), on the production AI of Assignment 9 (AIPlayer.LEGACY_A9;
+// <level>%a9). %combined was adopted: the production AI since Assignment 10. <level>%double,
+// %useful-cards, %own-sources, %value-shortfall, %develop-horizon, %combined
+const A10_VARIANTS = {
+    'double': { network: 'double' },
+    'useful-cards': { cards: 'useful' },
+    'buildable-cards': { cards: 'buildable' },   // added after useful-cards failed exploration
+    'own-sources': { sourcing: 'own' },
+    'value-shortfall': { shortfall: 'value' },
+    'develop-horizon': { develop: 'horizon' },
+    // The candidates that passed exploration, together
+    'combined': { network: 'double', develop: 'horizon' },
+    'a9': {},
+};
+for (const level of ['easy', 'normal', 'hard']) {
+    for (const [name, opts] of Object.entries(A10_VARIANTS)) POLICIES[`${level}%${name}`] = aiPolicy(level, { ...PRE_A10, ...opts });
 }
 const levelOf = (policy) => {
-    const level = policy.split(/[-+~^]/)[0];
+    const level = policy.split(/[-+~^%]/)[0];
     return ['easy', 'normal', 'hard'].includes(level) ? level : 'hard';
 };
 
@@ -283,7 +310,9 @@ function playMatch(E, { players, seed, seats, detailed = true, checkInvariantsEv
     let moves = 0;
     for (let d = logic.getCurrentDecision(); d.type !== 'gameOver'; d = logic.getCurrentDecision()) {
         if (++moves > 5000) throw new Error(`game did not finish (seed ${seed})`);
-        const move = d.type === 'shortfall' ? logic.defaultShortfallMove(d.playerId) : POLICIES[seats[d.playerId]](ctx, d);
+        const policy = POLICIES[seats[d.playerId]];
+        const move = d.type !== 'shortfall' ? policy(ctx, d)
+            : policy.shortfall ? policy.shortfall(ctx, d) : logic.defaultShortfallMove(d.playerId);
         const resolved = logic.resolveMove(d.playerId, move);
         if (!resolved.ok) throw new Error(`${seats[d.playerId]} chose an illegal move (seed ${seed}): ${resolved.message} ${JSON.stringify(move)}`);
         recordMove(E, state, logic, d.playerId, resolved.resolved, stats[d.playerId], { detailed });

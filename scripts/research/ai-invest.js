@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Assignment 9: does the AI turn its investments into income and VP?
 //
-//   node scripts/research/ai-invest.js [--players 3] [--seeds 50] [--levels normal] [--develop a8] [--sell a8] [--examples 2]
+//   node scripts/research/ai-invest.js [--players 3] [--seeds 50] [--levels normal] [--develop a8] [--sell a8] [--legacy a9] [--examples 2]
 //
 // Plays mirror games (every seat the same level; seeds 200000 + 1000 *
 // players + i as in ai-baseline.js) with the AI's diagnostics on, and follows
@@ -42,6 +42,9 @@ const DEVELOP = arg('develop', null);
 const SELL = arg('sell', null);
 const EXAMPLES = Number(arg('examples', 2));
 const E = loadEngine();
+// --legacy a9: the AI before Assignment 10 (AIPlayer.LEGACY_A9: single links,
+// Develop until the end), which the earlier reports measured
+const LEGACY_PINS = arg('legacy', null) === 'a9' ? E.AIPlayer.LEGACY_A9 : {};
 const A = E.ACTIONS;
 const SELLABLE = ['cottonMill', 'manufacturer', 'pottery'];
 
@@ -73,7 +76,7 @@ for (const level of LEVELS) {
         const state = new E.GameState(PLAYERS, names, names.map(() => ({ isAI: true, difficulty: level })), { seed });
         const logic = new E.GameLogic(state);
         const aiRng = new E.SeededRandom(aiSeedFor(seed));
-        const opts = { explain: true, ...(DEVELOP ? { develop: DEVELOP } : {}), ...(SELL ? { sell: SELL } : {}) };
+        const opts = { explain: true, ...LEGACY_PINS, ...(DEVELOP ? { develop: DEVELOP } : {}), ...(SELL ? { sell: SELL } : {}) };
         const live = [];       // sellable tiles still being followed
         const builtAfter = []; // { id, type, t, key }
         let t = 0;

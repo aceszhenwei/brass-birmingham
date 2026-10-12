@@ -2,8 +2,9 @@
 
 // Development and selling variants (Assignment 9), each measured against the
 // Assignment 8 AI (sell 'a8', AIPlayer.LEGACY_A8). sell 'calibrated' was
-// adopted, so production is develop 'a8' + sell 'calibrated'; it is pinned by
-// recorded games (test/fixtures/assignment9-baseline.json).
+// adopted; the AI of Assignment 9 (AIPlayer.LEGACY_A9) is pinned by recorded
+// games (test/fixtures/assignment9-baseline.json). Assignment 10 later made
+// develop 'horizon' the default (test/ai-close.test.js).
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -16,7 +17,8 @@ const baseline = require('./fixtures/assignment9-baseline.json');
 
 const E = loadEngine();
 const ser = (s) => JSON.stringify(s.serialize());
-const VARIANTS = [{ develop: 'horizon', sell: 'a8' }, { sell: 'calibrated' }, { sell: 'connect' }];
+const A9 = E.AIPlayer.LEGACY_A9;
+const VARIANTS = [{ ...A9, develop: 'horizon', sell: 'a8' }, { ...A9, sell: 'calibrated' }, { ...A9, sell: 'connect' }];
 const gameRoundsLeft = (state) => state.getRoundsRemaining() + (state.era === 'canal' ? E.ROUNDS_PER_ERA[state.numPlayers] : 0);
 
 // Walk complete games played by the AI with the given options, calling
@@ -44,7 +46,7 @@ test('each variant changes only its own valuation, in the intended direction', (
         const score = (list, action) => (list.find(c => c.action === action) || {}).score;
 
         // horizon: no Develop in the game's last two rounds, nothing else changes
-        const h = cands({ develop: 'horizon', sell: 'a8' });
+        const h = cands({ ...A9, develop: 'horizon', sell: 'a8' });
         if (gameRoundsLeft(state) <= 2) {
             if (score(base, 'develop') !== undefined) lateDevelops++;
             assert.equal(score(h, 'develop'), undefined);
@@ -54,7 +56,7 @@ test('each variant changes only its own valuation, in the intended direction', (
         for (const a of ['build', 'network', 'sell', 'loan']) assert.equal(score(h, a), score(base, a));
 
         // calibrated: only sellable build targets that cannot be sold yet score lower
-        const c = cands({ sell: 'calibrated' });
+        const c = cands({ ...A9, sell: 'calibrated' });
         const bb = (base.find(x => x.action === 'build') || {}).builds || [];
         const cb = (c.find(x => x.action === 'build') || {}).builds || [];
         bb.forEach((b, i) => {
@@ -71,7 +73,7 @@ test('each variant changes only its own valuation, in the intended direction', (
         for (const a of ['network', 'develop', 'sell', 'loan']) assert.equal(score(c, a), score(base, a));
 
         // connect: only Network can score higher
-        const n = cands({ sell: 'connect' });
+        const n = cands({ ...A9, sell: 'connect' });
         if (score(base, 'network') !== undefined) {
             assert.ok(score(n, 'network') >= score(base, 'network'));
             if (score(n, 'network') > score(base, 'network')) connectChanged++;
@@ -82,19 +84,19 @@ test('each variant changes only its own valuation, in the intended direction', (
         `variants exercised: ${lateDevelops}, ${calibratedChanged}, ${connectChanged}`);
 });
 
-test("the defaults are develop 'a8' and sell 'calibrated', and LEGACY_A8 is sell 'a8'", () => {
+test("the Assignment 9 AI is sell 'calibrated', and LEGACY_A8 is sell 'a8'", () => {
     walk([[3, 114]], (state, logic, d, aiRng) => {
         const key = (opts) => JSON.stringify(logic.moveFromDecision(
             E.AIPlayer.chooseAction(state, logic, d.playerId, 'hard', aiRng.clone(), opts)));
-        assert.equal(key({ develop: 'a8', sell: 'calibrated' }), key(null));
-        assert.equal(key(E.AIPlayer.LEGACY_A8), key({ overbuild: 'opportunity', sell: 'a8' }));
+        assert.equal(key({ ...A9, sell: 'calibrated' }), key(A9));
+        assert.equal(key(E.AIPlayer.LEGACY_A8), key({ ...A9, overbuild: 'opportunity', sell: 'a8' }));
     });
 });
 
 for (const players of [2, 3, 4]) {
-    test(`${players} players: the production AI replays the recorded Assignment 9 games exactly`, () => {
+    test(`${players} players: the Assignment 9 AI (LEGACY_A9) replays its recorded games exactly`, () => {
         for (const g of baseline.games[players]) {
-            const r = playGame({ players, seed: g.seed, difficulty: g.difficulty, E });
+            const r = playGame({ players, seed: g.seed, difficulty: g.difficulty, aiOptions: A9, E });
             assert.equal(fingerprint(r.state, { steps: r.steps, actions: r.actions }), g.fingerprint,
                 `seed ${g.seed} (${g.difficulty}) no longer plays as recorded`);
         }
