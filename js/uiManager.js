@@ -159,7 +159,9 @@ class UIManager {
         // Get valid card indices for current action
         let validCardIndices = null;
         if (inCardSelectMode) {
-            const target = this.selectedAction === ACTIONS.BUILD ? this.pendingData : null;
+            const move = this.pendingData.move;
+            const target = this.selectedAction === ACTIONS.BUILD && move
+                ? { cityId: move.location, industryType: move.industry } : null;
             validCardIndices = this.logic.getValidCardsForAction(playerId, this.selectedAction, target);
         }
 
@@ -711,15 +713,8 @@ class UIManager {
 
         document.querySelectorAll('#modal-body .choice-item').forEach(item => {
             item.addEventListener('click', () => {
-                const cityId = item.dataset.city;
-                const slotIndex = parseInt(item.dataset.slot);
-                const indType = item.dataset.type;
-                this.pendingData = { cityId, slotIndex, industryType: indType };
-                this.closeModal();
-                this.renderer.clearHighlights();
-                this.actionStep = 1;
-                this.updatePhaseBar();
-                this.updateHand();
+                this.proceedWithMove({ type: ACTIONS.BUILD, location: item.dataset.city,
+                    slot: parseInt(item.dataset.slot), industry: item.dataset.type });
             });
         });
     }
@@ -777,12 +772,7 @@ class UIManager {
             }
         }
 
-        this.pendingData = { connectionId };
-        this.renderer.clearHighlights();
-        this.closeModal();
-        this.actionStep = 1;
-        this.updatePhaseBar();
-        this.updateHand();
+        this.proceedWithMove({ type: ACTIONS.NETWORK, links: [connectionId] });
     }
 
     showSecondRailModal(firstConnId, seconds) {
@@ -811,13 +801,8 @@ class UIManager {
         document.querySelectorAll('#modal-body .choice-item').forEach(item => {
             item.addEventListener('click', () => {
                 const conn2 = item.dataset.conn;
-                this.pendingData = { connectionId: firstConnId };
-                if (conn2 !== 'none') this.pendingData.connectionId2 = conn2;
-                this.renderer.clearHighlights();
-                this.closeModal();
-                this.actionStep = 1;
-                this.updatePhaseBar();
-                this.updateHand();
+                this.proceedWithMove({ type: ACTIONS.NETWORK,
+                    links: conn2 === 'none' ? [firstConnId] : [firstConnId, conn2] });
             });
         });
     }
@@ -867,10 +852,7 @@ class UIManager {
         const remainingTypes = this.logic.getSecondDevelopOptions(playerId, firstType);
 
         if (remainingTypes.length === 0) {
-            this.closeModal();
-            this.actionStep = 1;
-            this.updatePhaseBar();
-            this.updateHand();
+            this.proceedWithMove({ type: ACTIONS.DEVELOP, industries: [firstType] });
             return;
         }
 
@@ -896,11 +878,8 @@ class UIManager {
         document.querySelectorAll('#modal-body .choice-item').forEach(item => {
             item.addEventListener('click', () => {
                 const type2 = item.dataset.type;
-                this.pendingData.industryType2 = type2 === 'none' ? null : type2;
-                this.closeModal();
-                this.actionStep = 1;
-                this.updatePhaseBar();
-                this.updateHand();
+                this.proceedWithMove({ type: ACTIONS.DEVELOP,
+                    industries: type2 === 'none' ? [firstType] : [firstType, type2] });
             });
         });
     }
@@ -917,24 +896,18 @@ class UIManager {
             return;
         }
 
-        let html = '<p style="margin-bottom:12px;color:var(--text-secondary);font-size:13px;">Select industries to sell (you may sell multiple in one action). Consuming a merchant\'s beer barrel grants that merchant\'s bonus.</p>';
+        let html = '<p style="margin-bottom:12px;color:var(--text-secondary);font-size:13px;">Select industries to sell (you may sell multiple in one action). Next you choose the merchant for each — drinking a merchant\'s beer barrel grants its bonus — and which beer to use.</p>';
         html += '<div class="choice-list">';
         for (const target of targets) {
             const display = INDUSTRY_DISPLAY[target.tile.type];
             const cityName = CITIES[target.cityId]?.name || target.cityId;
-            const offerMerchantBeer = target.beerNeeded > 0 && target.merchantBeerAvailable;
             html += `
                 <div class="choice-item" data-key="${target.key}" data-selected="false">
                     <div class="choice-item-icon">${display.icon}</div>
                     <div class="choice-item-text">
                         <div class="choice-item-name">${display.name} Lv${target.tile.tileData.level}</div>
                         <div class="choice-item-detail">${cityName} | VP: ${target.tile.tileData.vp} | Income: +${target.tile.tileData.income}
-                        ${target.beerNeeded > 0 ? ` | Beer: ${target.beerNeeded}` : ''}</div>
-                        ${offerMerchantBeer ? `
-                        <label class="choice-item-detail" style="display:flex;align-items:center;gap:5px;margin-top:4px;cursor:pointer;">
-                            <input type="checkbox" class="merchant-beer-cb" data-key="${target.key}" checked>
-                            Use merchant beer (claim bonus)
-                        </label>` : ''}
+                        ${target.beerNeeded > 0 ? ` | Beer: ${target.beerNeeded}` : ''}${target.merchantBeerAvailable && target.beerNeeded > 0 ? ' | merchant beer available' : ''}</div>
                     </div>
                 </div>
             `;
@@ -946,8 +919,7 @@ class UIManager {
 
         const selectedKeys = new Set();
         document.querySelectorAll('#modal-body .choice-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                if (e.target.closest('.merchant-beer-cb')) return; // checkbox toggle, not row select
+            item.addEventListener('click', () => {
                 const key = item.dataset.key;
                 if (selectedKeys.has(key)) {
                     selectedKeys.delete(key);
@@ -964,22 +936,15 @@ class UIManager {
                 this.showToast('Select at least one industry to sell', 'warning');
                 return;
             }
-            const sellPlan = [...selectedKeys].map(key => {
-                const cb = document.querySelector(`.merchant-beer-cb[data-key="${key}"]`);
-                return { key, useMerchantBeer: cb ? cb.checked : false };
-            });
             // Tiles in one sale share the available beer — reject a
             // combination that can't all be sold before a card is spent
-            const plan = this.logic.planSell(playerId, sellPlan);
-            if (!plan.ok) {
-                this.showToast(plan.message, 'warning');
+            const move = { type: ACTIONS.SELL, sales: [...selectedKeys].map(tile => ({ tile })) };
+            const check = this.logic.resolveMove(playerId, move, { requireCard: false });
+            if (!check.ok) {
+                this.showToast(check.message, 'warning');
                 return;
             }
-            this.pendingData.sellPlan = sellPlan;
-            this.closeModal();
-            this.actionStep = 1;
-            this.updatePhaseBar();
-            this.updateHand();
+            this.proceedWithMove(move);
         });
     }
 
@@ -1024,165 +989,124 @@ class UIManager {
         const playerId = this.state.currentPlayerId;
         const cardIndex = this.selectedCard;
 
-        switch (this.selectedAction) {
-            case ACTIONS.BUILD: {
-                const result = this.logic.executeBuild(
-                    playerId,
-                    this.pendingData.cityId,
-                    this.pendingData.slotIndex,
-                    this.pendingData.industryType,
-                    cardIndex
-                );
-                if (result.success) {
-                    const display = INDUSTRY_DISPLAY[this.pendingData.industryType];
-                    const cityName = CITIES[this.pendingData.cityId]?.name ||
-                        BREWERY_FARMS[this.pendingData.cityId]?.name || this.pendingData.cityId;
-                    this.addLogEntry(playerId, `built ${display.name} in ${cityName}`);
-                }
-                this.completeAction(result);
-                break;
+        if (this.selectedAction === ACTIONS.SCOUT) {
+            if (!this.pendingData.scoutCards) this.pendingData.scoutCards = [];
+            // Prevent selecting the same card index twice
+            if (this.pendingData.scoutCards.includes(cardIndex)) {
+                this.selectedCard = null;
+                this.updateHand();
+                return;
             }
-
-            case ACTIONS.NETWORK: {
-                const result = this.pendingData.connectionId2
-                    ? this.logic.executeNetworkDouble(
-                        playerId,
-                        this.pendingData.connectionId,
-                        this.pendingData.connectionId2,
-                        cardIndex)
-                    : this.logic.executeNetwork(
-                        playerId,
-                        this.pendingData.connectionId,
-                        cardIndex);
-                if (result.success) {
-                    this.addLogEntry(playerId, result.message.replace(/^Built /, 'built '));
-                }
-                this.completeAction(result);
-                break;
+            this.pendingData.scoutCards.push(cardIndex);
+            if (this.pendingData.scoutCards.length < 3) {
+                this.selectedCard = null;
+                this.updatePhaseBar();
+                this.updateHand();
+                return;
             }
-
-            case ACTIONS.DEVELOP: {
-                const result = this.logic.executeDevelop(
-                    playerId,
-                    this.pendingData.industryType1,
-                    this.pendingData.industryType2,
-                    cardIndex
-                );
-                if (result.success) {
-                    this.addLogEntry(playerId, result.message.toLowerCase());
-                }
-                this.completeAction(result);
-                break;
-            }
-
-            case ACTIONS.SELL: {
-                const result = this.logic.executeSell(
-                    playerId,
-                    this.pendingData.sellPlan,
-                    cardIndex,
-                    { autoResolveDevelop: this.state.players[playerId].isAI }
-                );
-                if (result.success) {
-                    this.addLogEntry(playerId, result.message.toLowerCase());
-                    if (result.pendingDevelopBonuses > 0) {
-                        // Gloucester bonus: let the human choose which tile(s)
-                        // to remove before the turn advances
-                        this.resolveDevelopBonuses(playerId, result.pendingDevelopBonuses,
-                            () => this.completeAction(result));
-                        break;
-                    }
-                }
-                this.completeAction(result);
-                break;
-            }
-
-            case ACTIONS.LOAN: {
-                const result = this.logic.executeLoan(playerId, cardIndex);
-                if (result.success) {
-                    this.addLogEntry(playerId, `took £${LOAN_AMOUNT} loan`);
-                }
-                this.completeAction(result);
-                break;
-            }
-
-            case ACTIONS.SCOUT: {
-                if (!this.pendingData.scoutCards) this.pendingData.scoutCards = [];
-                // Prevent selecting the same card index twice
-                if (this.pendingData.scoutCards.includes(cardIndex)) {
-                    this.selectedCard = null;
-                    this.updateHand();
-                    break;
-                }
-                this.pendingData.scoutCards.push(cardIndex);
-
-                if (this.pendingData.scoutCards.length >= 3) {
-                    const result = this.logic.executeScout(playerId, this.pendingData.scoutCards);
-                    if (result.success) {
-                        this.addLogEntry(playerId, 'scouted (gained wild cards)');
-                    }
-                    this.completeAction(result);
-                } else {
-                    this.selectedCard = null;
-                    this.updatePhaseBar();
-                    this.updateHand();
-                }
-                break;
-            }
-
-            case ACTIONS.PASS: {
-                const result = this.logic.executePass(playerId, cardIndex);
-                if (result.success) {
-                    this.addLogEntry(playerId, 'passed');
-                }
-                this.completeAction(result);
-                break;
-            }
-        }
-    }
-
-    // Gloucester merchant bonus: modal chain letting a human pick which
-    // tile(s) to remove from their mat (or skip), then continue the turn.
-    resolveDevelopBonuses(playerId, count, done) {
-        const types = this.logic.getDevelopableTypes(playerId);
-        if (count <= 0 || types.length === 0) {
-            this.closeModal();
-            done();
+            this.playMove(playerId, { type: ACTIONS.SCOUT, cards: this.pendingData.scoutCards });
             return;
         }
 
-        let html = '<p style="margin-bottom:12px;color:var(--text-secondary);font-size:13px;">Merchant bonus: remove a tile from your mat for free (no iron cost), or skip.</p>';
-        html += '<div class="choice-list">';
-        html += '<div class="choice-item" data-type="skip"><div class="choice-item-text"><div class="choice-item-name">Skip bonus</div></div></div>';
-        for (const t of types) {
-            const display = INDUSTRY_DISPLAY[t.type];
-            html += `
-                <div class="choice-item" data-type="${t.type}">
-                    <div class="choice-item-icon">${display.icon}</div>
-                    <div class="choice-item-text">
-                        <div class="choice-item-name">${display.name} Lv${t.level}</div>
-                    </div>
-                </div>
-            `;
+        // The move built (and its choices made) in the target step, plus the
+        // card; Loan and Pass need nothing but the card
+        const move = this.pendingData.move
+            ? { ...this.pendingData.move, card: cardIndex }
+            : { type: this.selectedAction, card: cardIndex };
+        this.playMove(playerId, move);
+    }
+
+    // Every action — human or AI — is played through the engine's applyMove
+    playMove(playerId, move) {
+        const result = this.logic.applyMove(playerId, move);
+        if (result.success) {
+            const msg = result.message;
+            this.addLogEntry(playerId, msg.charAt(0).toLowerCase() + msg.slice(1));
         }
-        html += '</div>';
+        this.completeAction(result);
+    }
 
-        this.showModal('Free Develop (Merchant Bonus)', html, () => {});
+    // After the target step: ask the player every decision the rules leave to
+    // them (coal between equally close mines, which iron works, which beer,
+    // which merchant, the free develop), one at a time, then go to the card
+    // step. Options the engine reports are always legal and completable.
+    proceedWithMove(move) {
+        const playerId = this.state.currentPlayerId;
+        const next = this.logic.getNextChoice(playerId, move);
+        if (next) {
+            this.showChoiceModal(next, value => this.proceedWithMove(withChoice(next.move, next.slot, value)));
+            return;
+        }
+        const check = this.logic.resolveMove(playerId, move, { requireCard: false });
+        if (!check.ok) {
+            this.showToast(check.message, 'warning');
+            this.cancelAction();
+            return;
+        }
+        this.pendingData = { move: check.resolved };
+        this.closeModal();
+        this.renderer.clearHighlights();
+        this.actionStep = 1;
+        this.updatePhaseBar();
+        this.updateHand();
+    }
 
-        document.querySelectorAll('#modal-body .choice-item').forEach(item => {
-            item.addEventListener('click', () => {
-                const type = item.dataset.type;
-                if (type === 'skip') {
-                    this.closeModal();
-                    done();
-                    return;
-                }
-                const removed = this.logic.applyFreeDevelop(playerId, 1, type);
-                if (removed.length) {
-                    this.addLogEntry(playerId, `used merchant bonus: developed ${removed[0]}`);
-                }
-                this.resolveDevelopBonuses(playerId, count - 1, done);
-            });
+    // A modal listing the options of one decision; onPick(value)
+    showChoiceModal(choice, onPick) {
+        const titles = {
+            coal: 'Choose Coal', iron: 'Choose Iron', beer: 'Choose Beer',
+            merchant: 'Choose Merchant', freeDevelop: 'Merchant Bonus: Free Develop',
+            shortfall: 'Income Shortfall',
+        };
+        let html = `<p style="margin-bottom:12px;color:var(--text-secondary);font-size:13px;">${choice.prompt || ''}</p>`;
+        html += '<div class="choice-list">';
+        choice.options.forEach((o, i) => {
+            html += `
+                <div class="choice-item" data-index="${i}">
+                    <div class="choice-item-text"><div class="choice-item-name">${o.label}</div></div>
+                </div>`;
         });
+        html += '</div>';
+        this.showModal(titles[choice.kind] || 'Choose', html, () => {});
+        document.querySelectorAll('#modal-body .choice-item').forEach(item => {
+            item.addEventListener('click', () => onPick(choice.options[parseInt(item.dataset.index)].value));
+        });
+    }
+
+    // Income shortfalls are decisions too: each player who can't pay chooses
+    // which tiles to sell (AI seats use the engine's automatic policy).
+    // Calls done() once every shortfall is covered.
+    resolvePendingShortfalls(done) {
+        const pending = this.state.getPendingShortfalls();
+        if (pending.length === 0) {
+            done();
+            return;
+        }
+        const playerId = pending[0];
+        const player = this.state.players[playerId];
+        const play = (tile) => {
+            const result = this.logic.applyMove(playerId, { type: 'shortfall', tile });
+            if (result.success) this.addLogEntry(playerId, result.message);
+            this.closeModal();
+            this.resolvePendingShortfalls(done);
+        };
+        if (player.isAI) {
+            play(this.state.defaultShortfallTile(playerId));
+            return;
+        }
+        const options = this.logic.getLegalMoves(playerId).map(m => {
+            const farm = BREWERY_FARMS[m.tile];
+            const tile = farm ? this.state.breweryFarmTiles[m.tile] : this.state.boardIndustries[m.tile];
+            const where = farm ? farm.name : CITIES[m.tile.split('_')[0]].name;
+            return { value: m.tile, label: `Sell ${INDUSTRY_DISPLAY[tile.type].name} Lv${tile.tileData.level} in ${where} ` +
+                `for £${Math.floor(tile.tileData.cost / 2)}${tile.flipped ? '' : ' (unflipped)'}` };
+        });
+        this.refresh();
+        this.showChoiceModal({
+            kind: 'shortfall',
+            prompt: `${player.name} is £${-player.money} short of paying their income. Choose an industry tile to sell for half its cost (repeat until covered).`,
+            options,
+        }, play);
     }
 
     completeAction(result) {
@@ -1210,12 +1134,18 @@ class UIManager {
 
         const turnResult = this.state.advanceTurn();
 
-        // Surface end-of-round upkeep events (income shortfall sales etc.)
+        // Surface end-of-round upkeep events (income shortfall VP losses)
         for (const ev of this.state.lastRoundEvents || []) {
             this.addLogEntry(ev.playerId, ev.message);
         }
         this.state.lastRoundEvents = [];
 
+        // Players who can't pay their income choose tiles to sell before
+        // anything else happens (and before an era is scored)
+        this.resolvePendingShortfalls(() => this.afterTurnAdvance(turnResult, previousPlayerId));
+    }
+
+    afterTurnAdvance(turnResult, previousPlayerId) {
         if (turnResult === 'endCanalEra') {
             this.addLogEntry(null, 'Canal Era Scoring', 'era');
             const scores = this.state.endCanalEra();
@@ -1276,9 +1206,7 @@ class UIManager {
         }
 
         this.selectedAction = decision.action;
-        this.pendingData = decision.pendingData;
-        this.selectedCard = decision.cardIndex;
-        this.processActionStep();
+        this.playMove(playerId, this.logic.moveFromDecision(decision));
     }
 
     // Safety net for the interactive game: if an AI action fails (or the AI
@@ -1321,12 +1249,7 @@ class UIManager {
                 const farmId = farm.dataset.farm;
                 const farmTargets = (this.pendingData.buildTargets || []).filter(t => t.cityId === farmId);
                 if (farmTargets.length >= 1) {
-                    this.pendingData = { cityId: farmId, slotIndex: 0, industryType: INDUSTRY_TYPES.BREWERY };
-                    this.closeModal();
-                    this.renderer.clearHighlights();
-                    this.actionStep = 1;
-                    this.updatePhaseBar();
-                    this.updateHand();
+                    this.proceedWithMove({ type: ACTIONS.BUILD, location: farmId, slot: 0, industry: INDUSTRY_TYPES.BREWERY });
                     return;
                 }
             }
@@ -1340,12 +1263,8 @@ class UIManager {
                 );
                 if (targets.length === 1) {
                     // Single option for this slot — select it directly
-                    this.pendingData = { cityId, slotIndex, industryType: targets[0].industryType };
-                    this.closeModal();
-                    this.renderer.clearHighlights();
-                    this.actionStep = 1;
-                    this.updatePhaseBar();
-                    this.updateHand();
+                    this.proceedWithMove({ type: ACTIONS.BUILD, location: cityId, slot: slotIndex,
+                        industry: targets[0].industryType });
                 } else if (targets.length > 1) {
                     // Multiple types for this slot — show filtered modal
                     this.closeModal();

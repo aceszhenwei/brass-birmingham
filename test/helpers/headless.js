@@ -20,36 +20,37 @@ class AIActionError extends Error {}
 
 const aiSeedFor = (seed) => (seed ^ 0x9E3779B9) >>> 0;
 
-// Apply a decision ({ action, pendingData, cardIndex }) exactly as the UI
-// would. Returns the engine result object.
+// Apply an AI decision ({ action, pendingData, cardIndex }) the way the UI
+// does: translated to a move and played through applyMove.
 function applyDecision(E, state, logic, playerId, decision) {
-    const A = E.ACTIONS;
-    const pd = decision.pendingData || {};
-    switch (decision.action) {
-        case A.BUILD:
-            return logic.executeBuild(playerId, pd.cityId, pd.slotIndex, pd.industryType, decision.cardIndex);
-        case A.NETWORK:
-            return pd.connectionId2
-                ? logic.executeNetworkDouble(playerId, pd.connectionId, pd.connectionId2, decision.cardIndex)
-                : logic.executeNetwork(playerId, pd.connectionId, decision.cardIndex);
-        case A.DEVELOP:
-            return logic.executeDevelop(playerId, pd.industryType1, pd.industryType2, decision.cardIndex);
-        case A.SELL:
-            return logic.executeSell(playerId, pd.sellPlan, decision.cardIndex, { autoResolveDevelop: true });
-        case A.LOAN:
-            return logic.executeLoan(playerId, decision.cardIndex);
-        case A.SCOUT:
-            return logic.executeScout(playerId, [...(pd.scoutCards || []), decision.cardIndex]);
-        case A.PASS:
-            return logic.executePass(playerId, decision.cardIndex);
-        default:
-            return { success: false, message: `unknown action ${decision.action}` };
-    }
+    return logic.applyMove(playerId, logic.moveFromDecision(decision));
 }
 
-// Advance after a successful action; handles era end / game end like the UI.
-function advance(state) {
+// The automatic shortfall policy (what the UI applies for AI seats)
+const defaultShortfallMove = (state, logic, playerId) => ({ type: 'shortfall', tile: state.defaultShortfallTile(playerId) });
+
+// Cover every pending income shortfall, one shortfall move at a time, using
+// `policy(state, logic, playerId) -> move` (default: the automatic policy;
+// humans choose in the UI). Returns the shortfall moves played.
+function resolveShortfalls(state, logic, policy = defaultShortfallMove) {
+    const played = [];
+    for (const playerId of state.getPendingShortfalls()) {
+        while (state.players[playerId].money < 0) {
+            const move = policy(state, logic, playerId);
+            const r = logic.applyMove(playerId, move);
+            if (!r.success) throw new AIActionError(`shortfall move failed: ${r.message}`);
+            played.push({ playerId, move });
+        }
+    }
+    return played;
+}
+
+// Advance after a successful action like the UI: next turn, then pending
+// shortfall decisions (which must be settled before an era is scored), then
+// era end / game end.
+function advance(state, logic = null, shortfallPolicy = defaultShortfallMove) {
     const result = state.advanceTurn();
+    if (logic) resolveShortfalls(state, logic, shortfallPolicy);
     if (result === 'endCanalEra') {
         const roundsPlayed = state.round - 1;
         state.endCanalEra();
@@ -61,6 +62,47 @@ function advance(state) {
         return { event: 'endGame', roundsPlayed };
     }
     return { event: null };
+}
+
+// Play a whole game choosing at random among getLegalMoves (with
+// every resource / merchant / bonus choice expanded) — including random
+// shortfall decisions. Every listed move must apply successfully and the
+// invariants must hold after every move. Returns a summary.
+function randomPlayout(E, { players = 3, seed = 1, expandChoices = true, checkEveryStep = true } = {}) {
+    const { state, logic } = createGame(E, { players, seed });
+    const rng = new E.SeededRandom((seed * 2654435761) >>> 0);
+    const summary = { players, seed, actions: 0, moves: {}, maxLegalMoves: 0, canalRounds: null, railRounds: null };
+    const pick = (playerId) => {
+        const moves = logic.getLegalMoves(playerId, { expandChoices });
+        if (moves.length === 0) throw new AIActionError(`no legal moves for player ${playerId} (seed ${seed})`);
+        summary.maxLegalMoves = Math.max(summary.maxLegalMoves, moves.length);
+        // Pick a move TYPE uniformly first, so builds, sales and links are
+        // exercised as often as the far more numerous pass/scout variants
+        const types = [...new Set(moves.map(m => m.type))];
+        const type = types[rng.int(types.length)];
+        const ofType = moves.filter(m => m.type === type);
+        const move = ofType[rng.int(ofType.length)];
+        summary.moves[move.type] = (summary.moves[move.type] || 0) + 1;
+        return move;
+    };
+    while (!state.gameOver) {
+        if (++summary.actions > 5000) throw new AIActionError(`random game did not terminate (seed ${seed})`);
+        const playerId = state.currentPlayerId;
+        const move = pick(playerId);
+        const r = logic.applyMove(playerId, move);
+        if (!r.success) {
+            throw new AIActionError(`legal move rejected: ${JSON.stringify(move)} -> "${r.message}" (seed ${seed})`);
+        }
+        const { event, roundsPlayed } = advance(state, logic, (st, lg, pid) => pick(pid));
+        if (event === 'endCanalEra') summary.canalRounds = roundsPlayed;
+        if (event === 'endGame') summary.railRounds = roundsPlayed;
+        if (checkEveryStep) {
+            const problems = checkInvariants(E, state);
+            if (problems.length) throw new AIActionError(`invariant violated after ${JSON.stringify(move)} (seed ${seed}):\n  ${problems.join('\n  ')}`);
+        }
+    }
+    summary.state = state;
+    return summary;
 }
 
 // A new seeded game with all seats AI.
@@ -111,7 +153,7 @@ function playActions(E, state, logic, {
         }
         summary.actions[decision.action] = (summary.actions[decision.action] || 0) + 1;
 
-        const { event, roundsPlayed } = advance(state);
+        const { event, roundsPlayed } = advance(state, logic);
         if (event === 'endCanalEra') summary.canalRounds = roundsPlayed;
         if (event === 'endGame') summary.railRounds = roundsPlayed;
 
@@ -193,4 +235,4 @@ function continuationCheck(E, { players = 3, seed = 1, difficulty = 'normal', ch
     return summary;
 }
 
-module.exports = { applyDecision, advance, createGame, playActions, playGame, continuationCheck, aiSeedFor, AIActionError };
+module.exports = { applyDecision, resolveShortfalls, randomPlayout, advance, createGame, playActions, playGame, continuationCheck, aiSeedFor, AIActionError };

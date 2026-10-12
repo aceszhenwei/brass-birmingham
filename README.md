@@ -210,11 +210,14 @@ Open [http://localhost:8080](http://localhost:8080) in your browser. No build st
 1. **Select an action** from the action panel (Build, Network, Develop, Sell, Loan, Scout, or Pass)
 2. **Follow the phase bar** — it shows your current step and what to do next
 3. **Choose your target** from the modal or board
-4. **Click a valid card** (highlighted with a gold pulse) to discard
+4. **Make any choices** the rules leave to you (which coal, iron, beer or merchant), if there is more than one option
+5. **Click a valid card** (highlighted with a gold pulse) to discard
+
+If you can't pay your income at the end of a round, you choose which of your industry tiles to sell.
 
 Disabled action buttons show **tooltips explaining why** they can't be used (e.g. "No iron available", "Need at least 3 cards").
 
-The game handles all resource sourcing (coal, iron, beer), market pricing, turn order, and scoring automatically.
+The game handles market pricing, turn order and scoring automatically, and sources coal, iron and beer for you whenever the rules leave no choice.
 
 ### Running the Tests
 
@@ -256,6 +259,30 @@ const view  = state.getPlayerView(playerId);         // what one player may see
 See [`docs/state-model.md`](docs/state-model.md) for the state model, the
 save format and the hidden-information rules. There is no save/load UI yet.
 
+### Moves and Player Choices (engine API)
+
+Every decision is a plain JSON move. One engine validates and executes moves
+for the UI, the AI and the tests:
+
+```js
+logic.getLegalMoves(playerId)                            // every legal move
+logic.getLegalMoves(playerId, { expandChoices: true })   // …with every resource/merchant choice
+logic.applyMove(playerId, { type: 'build', card: 0, location: 'dudley', slot: 1,
+                            industry: 'ironWorks', coal: ['mine:kidderminster_0'] })
+logic.getNextChoice(playerId, move)                      // the next decision for a human
+```
+
+Illegal moves are rejected with no change to the game. Players choose
+everything the rulebook lets them choose:
+- coal from equally close mines;
+- which iron works;
+- which beer;
+- which merchant, and with it the bonus;
+- Gloucester's free develop;
+- which tiles to sell when income can't be paid.
+
+See [`docs/moves.md`](docs/moves.md).
+
 ### Tips for New Players
 
 - **Build breweries early** — Beer is the most contested resource in the game
@@ -276,6 +303,7 @@ This implementation follows the official Brass: Birmingham rulebook:
 - **Beer** for selling comes from your own breweries (anywhere), connected opponent breweries, or the one barrel beside the merchant tile you sell to
 - **A sale is all-or-nothing** — if the selected tiles can't all be sold with the available beer, nothing is spent
 - **Overbuilding** your own tiles requires same type + higher level; opponent coal/iron tiles can only be overbuilt when that resource is globally depleted
+- **Player choices** — when the rules allow a choice (equally close coal mines, any iron works, any eligible beer, which merchant tile, Gloucester's free develop, which tiles to sell for an income shortfall), you are asked; otherwise everything is sourced automatically
 - **Pottery I and III** have the lightbulb icon and cannot be developed — they must be built
 - **Turn order** each round goes to whoever spent the least money
 
@@ -293,19 +321,20 @@ fallback.
 | `css/style.css` | Dark Victorian theme with CSS animations, card-select mode, transitions |
 | `js/gameData.js` | All constants: tiles, cities, connections, cards, merchants, markets |
 | `js/random.js` | `SeededRandom`: the seeded, serializable generator behind every shuffle |
+| `js/moves.js` | Move engine: move format, planners and choice points, `getLegalMoves` / `applyMove` / `getNextChoice` |
 | `js/gameState.js` | Game state, market mechanics, network pathfinding, turn management, clone / serialize / restore |
-| `js/gameLogic.js` | All 7 actions + `getDisabledReason()` for tooltip feedback |
+| `js/gameLogic.js` | Rules queries (targets, costs, sources), legacy `execute*` wrappers, `getDisabledReason()` |
 | `js/industryIcons.js` | Engraved industry illustrations shared by the board and hand cards |
 | `js/boardAssets.js` | Bundled board/component artwork + measured board layout |
 | `js/boardRenderer.js` | SVG board: procedural terrain, frame + score track, calibration mode |
 | `js/uiManager.js` | Phase bar, card selection mode, game log, turn transitions, modals |
 | `js/main.js` | Entry point, setup screen |
 | `js/aiPlayer.js` | Heuristic AI opponent (Easy / Normal / Hard) |
-| `test/*.test.js` | `node:test` suite: setup, all 7 actions, resources, turns/eras, scoring, regressions, determinism, cloning, serialization, AI games |
+| `test/*.test.js` | `node:test` suite: setup, all 7 actions, resources, turns/eras, scoring, regressions, determinism, cloning, serialization, legal moves, player choices, UI choice flow, AI and random games |
 | `test/helpers/` | Engine loader (`vm`), scenario builders, strict headless driver, state invariants, game fingerprints, DOM stub |
 | `test/fixtures/` | Games recorded from the Assignment 1 code, for behaviour comparison |
 | `scripts/simulate.js` | Headless AI-vs-AI regression run |
-| `docs/` | Rules audit, state model / save format, assignment reports |
+| `docs/` | Rules audit, state model / save format, moves and choices, assignment reports |
 
 ---
 

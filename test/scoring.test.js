@@ -4,7 +4,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { newGame, placeIndustry, placeLink } = require('./helpers/scenario');
+const { newGame, plain, placeIndustry, placeLink } = require('./helpers/scenario');
 
 test('Link VP: 1 per link icon on FLIPPED adjacent tiles, 2 per adjacent merchant', () => {
     const { E, state } = newGame({ players: 3, seed: 8 });
@@ -45,17 +45,27 @@ test('Level II+ tiles score in both eras', () => {
     assert.equal(state.gameOver, true);
 });
 
-test('Shortfall: sell tiles for half their cost, stopping once covered', () => {
-    const { E, state } = newGame({ players: 2, seed: 12 });
+test('Shortfall: the player chooses tiles to sell for half their cost, stopping once covered', () => {
+    const { E, state, logic } = newGame({ players: 2, seed: 12 });
     const T = E.INDUSTRY_TYPES;
     placeIndustry(E, state, 'birmingham_0', 0, T.COTTON_MILL, 1);   // cost 12 -> £6
     placeIndustry(E, state, 'coventry_0', 0, T.POTTERY, 1);         // cost 17 -> £8
     state.players[0].money = 1;
     state.players[0].incomeSpace = 5; // level -5
     state.endRound();
-    assert.equal(state.players[0].money, 1 - 5 + 6);
-    assert.equal(Object.values(state.boardIndustries).filter(t => t.playerId === 0).length, 1);
-    assert.ok(state.lastRoundEvents.some(e => e.type === 'shortfall-sale'));
+    // The shortfall is now the player's decision; nothing else may be played
+    assert.equal(state.players[0].money, -4);
+    assert.deepEqual(plain(state.getPendingShortfalls()), [0]);
+    assert.deepEqual(plain(logic.getLegalMoves(0).map(m => m.tile)).sort(), ['birmingham_0', 'coventry_0']);
+    assert.deepEqual(plain(logic.getLegalMoves(1)), []);
+    assert.equal(logic.applyMove(1, { type: 'pass', card: 0 }).success, false);
+    // They choose the Pottery (the old automatic policy would have taken the Cotton Mill)
+    const r = logic.applyMove(0, { type: 'shortfall', tile: 'coventry_0' });
+    assert.equal(r.success, true, r.message);
+    assert.equal(state.players[0].money, 1 - 5 + 8);
+    assert.ok(state.boardIndustries.birmingham_0, 'stops as soon as the shortfall is covered');
+    assert.equal(state.boardIndustries.coventry_0, undefined);
+    assert.deepEqual(plain(state.getPendingShortfalls()), []);
 });
 
 test('Shortfall with no tiles to sell costs 1 VP per £1 (never below 0 VP)', () => {

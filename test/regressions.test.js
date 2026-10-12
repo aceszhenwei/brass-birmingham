@@ -210,7 +210,7 @@ test('A4: rail coal comes from the mine closest to EITHER end of the new link', 
     assert.equal(state.players[1].incomeSpace, 10);
 });
 
-test('A4: a farther mine cannot be chosen over the closest one', () => {
+test('A4: a farther mine cannot be chosen over the closest one (the choice is rejected)', () => {
     const { E, state, logic } = railSetup();
     const T = E.INDUSTRY_TYPES;
     placeIndustry(E, state, 'stone_1', 1, T.COAL_MINE, 2);                 // distance 0
@@ -218,9 +218,15 @@ test('A4: a farther mine cannot be chosen over the closest one', () => {
     placeLink(state, 'leek-stokeOnTrent', 2);
     const conn = E.CONNECTIONS.find(c => c.id === 'stokeOnTrent-stone');
     assert.deepEqual(plain(logic.getRailCoalOptions(conn, 0).mines.map(m => m.key)), ['stone_1']);
-    const r = logic.executeNetwork(0, 'stokeOnTrent-stone', 0, { coalMineKey: 'leek_1' });
+    // Choices are validated, not silently replaced: a farther mine is
+    // rejected and nothing changes
+    const before = JSON.stringify(state.serialize());
+    const bad = logic.executeNetwork(0, 'stokeOnTrent-stone', 0, { coalMineKey: 'leek_1' });
+    assert.equal(bad.success, false);
+    assert.equal(JSON.stringify(state.serialize()), before);
+    const r = logic.executeNetwork(0, 'stokeOnTrent-stone', 0, { coalMineKey: 'stone_1' });
     assert.equal(r.success, true, r.message);
-    assert.equal(leek.resourceCubes, 3, 'the preference is ignored for a farther mine');
+    assert.equal(leek.resourceCubes, 3);
     assert.equal(state.boardIndustries.stone_1.resourceCubes, 2);
 });
 
