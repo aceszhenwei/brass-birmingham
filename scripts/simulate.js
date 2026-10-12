@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Headless AI-vs-AI simulation for regression testing.
 //
-//   node scripts/simulate.js [--games 100] [--players 2,3,4] [--first 1] [--no-a1] [--random 20]
+//   node scripts/simulate.js [--games 100] [--players 2,3,4] [--first 1] [--no-a1] [--random 20] [--mixed 30]
 //
 // For every game (seed = 1000 * players + i, i = first .. first+games-1,
 // difficulty rotating easy/normal/hard):
@@ -14,7 +14,9 @@
 //   3. Unless --no-a1: replay the same seed with the Assignment 1 randomness
 //      layout and compare it to test/fixtures/assignment1-baseline.json
 //      (games recorded from the Assignment 1 code).
-// Then (--random N, default 20 per player count) play N games choosing at
+// Then (--mixed N, default 30 per player count) play N games where the seats
+// have DIFFERENT difficulties (easy / normal / hard / normal), and
+// (--random N, default 20 per player count) play N games choosing at
 // random among getLegalMoves with every choice expanded, including random
 // income-shortfall decisions: every listed move must apply and every
 // invariant must hold.
@@ -37,6 +39,7 @@ const PLAYERS = String(arg('players', '2,3,4')).split(',').map(Number);
 const FIRST = Number(arg('first', 1));
 const COMPARE_A1 = !process.argv.includes('--no-a1');
 const RANDOM = Number(arg('random', 20));
+const MIXED = Number(arg('mixed', 30));
 const ROUNDS = { 2: 10, 3: 9, 4: 8 };
 const DIFFICULTIES = ['easy', 'normal', 'hard'];
 const E = loadEngine();
@@ -93,6 +96,26 @@ for (const players of PLAYERS) {
     if (completed) {
         console.log(`  avg actions/game: ${(steps / completed).toFixed(1)}, avg winning VP: ${(winnerVP / completed).toFixed(1)}`);
         console.log(`  actions: ${Object.entries(actions).sort((a, b) => b[1] - a[1]).map(([a, n]) => `${a} ${n}`).join(', ')}`);
+    }
+    if (MIXED > 0) {
+        const m0 = Date.now();
+        let mixedOk = 0;
+        for (let i = 1; i <= MIXED; i++) {
+            const seed = 70000 + 1000 * players + i;
+            try {
+                const g = continuationCheck(E, { players, seed, difficulty: ['easy', 'normal', 'hard', 'normal'],
+                    checkpoint: 1 + (i * 37) % 70 });
+                if (g.canalRounds !== ROUNDS[players] || g.railRounds !== ROUNDS[players]) {
+                    roundMismatches.push(`mixed seed ${seed}: canal ${g.canalRounds}, rail ${g.railRounds}`);
+                } else {
+                    mixedOk++;
+                }
+            } catch (err) {
+                failures.push(`mixed: ${err.message.split('\n').slice(0, 4).join('\n    ')}`);
+            }
+        }
+        totalProblems += MIXED - mixedOk;
+        console.log(`  mixed-difficulty games (seats easy/normal/hard/normal): ${mixedOk}/${MIXED} completed in ${((Date.now() - m0) / 1000).toFixed(1)}s`);
     }
     if (RANDOM > 0) {
         const r0 = Date.now();

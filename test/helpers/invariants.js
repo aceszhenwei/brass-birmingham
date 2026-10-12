@@ -9,6 +9,19 @@ function checkInvariants(E, state) {
     const T = E.INDUSTRY_TYPES;
     const LINKS_PER_PLAYER = 14;
 
+    // Progression: actions within the turn's allowance; a finished era is
+    // only left unscored while a shortfall decision is pending; the current
+    // player (if the game goes on) holds cards
+    if (state.actionsThisTurn < 0 || state.actionsThisTurn >= state.actionsPerTurn) {
+        bad(`actionsThisTurn ${state.actionsThisTurn} outside the turn's ${state.actionsPerTurn} actions`);
+    }
+    if (!state.gameOver && state.isEraOver() && state.getPendingShortfalls().length === 0) {
+        bad('the era is over but was not scored');
+    }
+    if (!state.gameOver && !state.isEraOver() && state.currentPlayer.hand.length === 0) {
+        bad(`current player ${state.currentPlayerId} has no cards`);
+    }
+
     // Turn bookkeeping
     const order = [...state.turnOrder].sort((a, b) => a - b);
     if (order.join() !== state.players.map(p => p.id).join()) bad(`turn order is not a permutation: ${state.turnOrder}`);
@@ -24,7 +37,11 @@ function checkInvariants(E, state) {
     let wildLoc = state.wildLocationPile;
     let wildInd = state.wildIndustryPile;
     for (const p of state.players) {
-        if (p.money < 0) bad(`player ${p.id} has negative money ${p.money}`);
+        // Negative money = an income shortfall the player is still covering,
+        // which requires tiles to sell
+        if (p.money < 0 && state.ownedTileKeys(p.id).length === 0) {
+            bad(`player ${p.id} has negative money ${p.money} and no tiles to sell`);
+        }
         if (p.vp < 0) bad(`player ${p.id} has negative VP ${p.vp}`);
         if (p.incomeSpace < 0 || p.incomeSpace > E.MAX_INCOME_SPACE) bad(`player ${p.id} income space ${p.incomeSpace}`);
         if (p.hand.length > E.HAND_SIZE) bad(`player ${p.id} holds ${p.hand.length} cards`);

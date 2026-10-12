@@ -52,6 +52,12 @@ logic.moveFromDecision(aiDecision)   // the existing AI's { action, pendingData,
 with a message and leaves the state byte-for-byte unchanged. The tests check
 this with thousands of fuzzed moves.
 
+**Real games use `play`.** `applyMove` applies one move's effects only. Since
+Assignment 4, games are played through `logic.play(playerId, move)`
+([`engine.md`](engine.md)). `play` also checks that the move belongs to the
+decision that is due, then advances the game: turns, rounds, income,
+shortfalls, eras and final scoring.
+
 **The old entry points still work.** `executeBuild`, `executeNetwork`,
 `executeNetworkDouble`, `executeDevelop`, `executeSell`, `executeLoan`,
 `executeScout` and `executePass` are thin wrappers that build a move and call
@@ -68,7 +74,7 @@ this with thousands of fuzzed moves.
   - interchangeable resource units are deduplicated;
   - orders with no effect are listed once: Scout card triples, and two different industries in one Develop.
 - **During a shortfall.** While an income shortfall is pending, the owing player's only legal moves are `shortfall` moves, and every other player has none.
-- **Turn order is not enforced.** Any player id can be asked, because turn flow still lives in the UI (Assignment 4).
+- **Any player id can be asked.** Use `getCurrentLegalMoves()` for the decision that is actually due; `play` enforces it.
 - **Size.** A typical position has up to about 550 expanded moves. A full listing takes about 10–30 ms.
 
 ## How a move is checked: planners and choice points
@@ -124,9 +130,9 @@ of the game allowed skipping.
 - **Resolving it.** Each `shortfall` move sells one chosen tile for half its cost. The decision ends as soon as the money is ≥ 0. If the last tile is sold and money is still negative, the player loses 1 VP per £1 owed (never below 0 VP).
 - **No tiles at all.** A player with no tiles loses VP at once, because there is nothing to choose.
 - **What is blocked.** While any shortfall is pending, no other move can be applied, and `endCanalEra()` refuses to score the era.
-- **Who decides.**
+- **Who decides.** The engine reports the shortfall as the current decision (`getCurrentDecision()` → `{ type: 'shortfall', playerId, owed }`) and waits.
   - The UI asks human players with a prompt.
-  - AI seats use `state.defaultShortfallTile(id)`: unflipped tiles first, then the lowest VP. This is the previous automatic policy.
+  - AI seats use `logic.defaultShortfallMove(id)`: unflipped tiles first, then the lowest VP. This is the previous automatic policy.
   - The headless driver does the same.
 - **Saving.** A game saved mid-shortfall restores correctly, with the decision still pending.
 
@@ -135,6 +141,6 @@ of the game allowed skipping.
 1. The player picks an action and a target (build space, link, tiles to sell, tiles to develop), exactly as before.
 2. `UIManager.proceedWithMove(move)` asks `getNextChoice` for each remaining decision and shows it as a choice dialog (Choose Coal / Iron / Beer / Merchant, Free Develop).
 3. It then moves to the card step. Positions where the rules allow only one option never show a dialog.
-4. The card click completes the move, and `playMove` calls `applyMove`.
+4. The card click completes the move, and `playMove` calls `logic.play`.
 5. AI decisions go through the same `playMove` after `moveFromDecision`.
-6. After every turn, `resolvePendingShortfalls` prompts human players before the next turn starts or the era is scored.
+6. After every move, `continueGame` asks the engine for the next decision: a shortfall prompt, an AI turn or a human turn. See [`engine.md`](engine.md).

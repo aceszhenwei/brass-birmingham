@@ -1,6 +1,6 @@
 # Brass: Birmingham — Rules Audit & Architecture Review
 
-Original audit of commit `2c1fe1f`. **Status after Assignments 1–3** is summarised below; details are in [`assignment-1-report.md`](assignment-1-report.md), [`assignment-2-report.md`](assignment-2-report.md) and [`assignment-3-report.md`](assignment-3-report.md).
+Original audit of commit `2c1fe1f`. **Status after Assignments 1–4** is summarised below; details are in [`assignment-1-report.md`](assignment-1-report.md), [`assignment-2-report.md`](assignment-2-report.md), [`assignment-3-report.md`](assignment-3-report.md) and [`assignment-4-report.md`](assignment-4-report.md).
 
 | Finding | Status |
 |---|---|
@@ -12,7 +12,7 @@ Original audit of commit `2c1fe1f`. **Status after Assignments 1–3** is summar
 | A6 Develop/second-rail affordability, AI hand visible | **Fixed** |
 | B Missing player choices | **Fixed in Assignment 3:** coal ties, iron works, beer, merchant and shortfall tiles are all player choices, part of every move and asked in the UI ([`moves.md`](moves.md)) |
 | C7 Tile data vs rulebook illustration | **Resolved, no change** — the bundled retail player mat and tile art match `gameData.js` |
-| D Engine refactor | **Mostly done:** seeded RNG, clone and serialize/restore (Assignment 2); one move format with `getLegalMoves` / `applyMove` and player choices (Assignment 3, [`assignment-3-report.md`](assignment-3-report.md)). Still to do: turn and era flow in the engine (Assignment 4) |
+| D Engine refactor | **Complete:** seeded RNG, clone and serialize/restore (Assignment 2); one move format with `getLegalMoves` / `applyMove` and player choices (Assignment 3); the engine runs the whole game through `getCurrentDecision` / `play` (Assignment 4, [`engine.md`](engine.md), [`assignment-4-report.md`](assignment-4-report.md)) |
 
 ## How this was checked
 

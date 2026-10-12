@@ -30,7 +30,7 @@ const POSITIONS = positions();
 test('every listed move (all choice variants) applies successfully', () => {
     let checked = 0;
     for (const pos of POSITIONS.filter((_, i) => i % 3 === 0)) {
-        const pid = pos.currentPlayerId;
+        const pid = new E.GameLogic(pos).getCurrentDecision().playerId;
         const moves = new E.GameLogic(pos).getLegalMoves(pid, { expandChoices: true });
         assert.ok(moves.length > 0);
         for (const move of moves) {
@@ -47,7 +47,7 @@ test('every listed move (all choice variants) applies successfully', () => {
 test('listed moves are unique and fully specified', () => {
     for (const pos of POSITIONS.filter((_, i) => i % 4 === 0)) {
         const logic = new E.GameLogic(pos);
-        const pid = pos.currentPlayerId;
+        const pid = new E.GameLogic(pos).getCurrentDecision().playerId;
         for (const opts of [{}, { expandChoices: true }]) {
             const keys = logic.getLegalMoves(pid, opts).map(m => JSON.stringify(m));
             assert.equal(new Set(keys).size, keys.length, 'duplicate moves');
@@ -63,7 +63,7 @@ test('listed moves are unique and fully specified', () => {
 test('the action buttons and the move list agree (canPerformAction ⇔ a move of that type)', () => {
     for (const pos of POSITIONS) {
         const logic = new E.GameLogic(pos);
-        const pid = pos.currentPlayerId;
+        const pid = new E.GameLogic(pos).getCurrentDecision().playerId;
         const types = new Set(logic.getLegalMoves(pid).map(m => m.type));
         for (const action of Object.values(E.ACTIONS)) {
             assert.equal(types.has(action), logic.canPerformAction(action, pid),
@@ -75,7 +75,7 @@ test('the action buttons and the move list agree (canPerformAction ⇔ a move of
 test('completeness: every target the rules queries offer appears as a move', () => {
     for (const pos of POSITIONS.filter((_, i) => i % 2 === 0)) {
         const logic = new E.GameLogic(pos);
-        const pid = pos.currentPlayerId;
+        const pid = new E.GameLogic(pos).getCurrentDecision().playerId;
         const moves = logic.getLegalMoves(pid, { allCards: true });
         const has = (pred) => moves.some(pred);
         for (const t of logic.getValidBuildTargets(pid)) {
@@ -108,8 +108,9 @@ test("the AI's decisions are always among the legal moves", () => {
         const aiRng = new E.SeededRandom(aiSeedFor(seed));
         let n = 0;
         while (!state.gameOver) {
-            const pid = state.currentPlayerId;
-            if (n++ % 3 === 0) {
+            const d = logic.getCurrentDecision();
+            const pid = d.playerId;
+            if (d.type === 'action' && n++ % 3 === 0) {
                 const decision = E.AIPlayer.chooseAction(state, logic, pid, 'normal', aiRng.clone());
                 const r = logic.resolveMove(pid, logic.moveFromDecision(decision));
                 assert.equal(r.ok, true, r.message);
@@ -132,7 +133,7 @@ test('enumeration and validation never modify the state', () => {
     for (const pos of POSITIONS.filter((_, i) => i % 5 === 0)) {
         const before = ser(pos);
         const logic = new E.GameLogic(pos);
-        const pid = pos.currentPlayerId;
+        const pid = new E.GameLogic(pos).getCurrentDecision().playerId;
         const moves = logic.getLegalMoves(pid, { expandChoices: true });
         for (const m of moves.slice(0, 50)) {
             logic.resolveMove(pid, m);
@@ -152,7 +153,7 @@ test('fuzzed moves are either legal or rejected without any state change', () =>
     let rejected = 0;
     let accepted = 0;
     for (const pos of POSITIONS.filter((_, i) => i % 2 === 0)) {
-        const pid = pos.currentPlayerId;
+        const pid = new E.GameLogic(pos).getCurrentDecision().playerId;
         const moves = new E.GameLogic(pos).getLegalMoves(pid, { expandChoices: true });
         for (let k = 0; k < 15; k++) {
             const move = JSON.parse(JSON.stringify(pickFrom(moves)));
