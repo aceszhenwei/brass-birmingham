@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Assignment 8: how and why the AI overbuilds its own industries.
 //
-//   node scripts/research/ai-overbuild.js [--players 3] [--seeds 50] [--levels normal] [--overbuild a6] [--examples 2]
+//   node scripts/research/ai-overbuild.js [--players 3] [--seeds 50] [--levels normal] [--overbuild a6] [--sell a8] [--examples 2]
 //
 // Plays mirror games (every seat the same level; seeds 200000 + 1000 *
 // players + i as in ai-baseline.js) with the AI's diagnostics on, and for
@@ -21,6 +21,7 @@
 //   unflipped     any other unflipped tile (a brewery's beer, or a cotton
 //                 mill / manufacturer / pottery that was never sold)
 // --overbuild selects a research variant (js/aiPlayer.js, options.overbuild).
+// --sell a8 runs on the selling valuation of Assignment 8, which it studied.
 
 'use strict';
 
@@ -35,6 +36,7 @@ const PLAYERS = Number(arg('players', 3));
 const SEEDS = Number(arg('seeds', 50));
 const LEVELS = String(arg('levels', 'normal')).split(',');
 const VARIANT = arg('overbuild', null);
+const SELL = arg('sell', null);
 const EXAMPLES = Number(arg('examples', 2));
 const E = loadEngine();
 const A = E.ACTIONS;
@@ -55,7 +57,7 @@ for (const level of LEVELS) {
         const state = new E.GameState(PLAYERS, names, names.map(() => ({ isAI: true, difficulty: level })), { seed });
         const logic = new E.GameLogic(state);
         const aiRng = new E.SeededRandom(aiSeedFor(seed));
-        const opts = { explain: true, ...(VARIANT ? { overbuild: VARIANT } : {}) };
+        const opts = { explain: true, ...(VARIANT ? { overbuild: VARIANT } : {}), ...(SELL ? { sell: SELL } : {}) };
         const pending = [];    // builds waiting for their era's end: { key, rec | null, era }
 
         // At each era end, settle what became of the tiles built in it

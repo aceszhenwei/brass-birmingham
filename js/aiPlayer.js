@@ -11,12 +11,17 @@
 //
 // Overbuilding (Assignment 8): replacing one of the player's own tiles is
 // charged for the future value of the tile it replaces.
+// Selling (Assignment 9): a sellable industry built where it cannot be sold
+// yet (no connected merchant buys it, or not enough beer) is valued with its
+// measured sale probability instead of an optimistic one.
 //
 // Research baselines: chooseAction(..., options) with AIPlayer.LEGACY_A5
 // reproduces the AI exactly as audited in Assignment 5, including its two
 // known defects (Hard reads opponents' hands; the rounds-remaining estimate
 // is wrong for half of each era). AIPlayer.LEGACY_A6 reproduces the AI of
-// Assignments 6-7 (overbuilds scored as if the space were empty). They exist
+// Assignments 6-7 (overbuilds scored as if the space were empty), and
+// AIPlayer.LEGACY_A8 the AI of Assignment 8 (sale probability 0.6 for
+// sellable tiles that cannot be sold yet). They exist
 // only so experiments can compare against them (docs/research/); the game
 // never uses them.
 // ============================================================================
@@ -31,9 +36,10 @@ const AIPlayer = (() => {
     const FLEX_WEIGHT = 0.8;
 
     // Per-call options (see chooseAction)
-    const DEFAULT_OPTIONS = Object.freeze({ information: 'player', rounds: 'engine', loan: 'a6', overbuild: 'opportunity' });
-    const LEGACY_A5 = Object.freeze({ information: 'full', rounds: 'deck-estimate', overbuild: 'a6' });
-    const LEGACY_A6 = Object.freeze({ overbuild: 'a6' });
+    const DEFAULT_OPTIONS = Object.freeze({ information: 'player', rounds: 'engine', loan: 'a6', overbuild: 'opportunity', develop: 'a8', sell: 'calibrated' });
+    const LEGACY_A5 = Object.freeze({ information: 'full', rounds: 'deck-estimate', overbuild: 'a6', sell: 'a8' });
+    const LEGACY_A6 = Object.freeze({ overbuild: 'a6', sell: 'a8' });
+    const LEGACY_A8 = Object.freeze({ sell: 'a8' });
     let options = DEFAULT_OPTIONS;
 
     // ------------------------------------------------------------------
@@ -113,9 +119,63 @@ const AIPlayer = (() => {
                 connected.has(mt.location) && state.merchantTileAccepts(mt, industryType)
             );
             if (hasReachableMerchant) base += 0.2;
+            // options.sell 'calibrated' (default since Assignment 9): a tile
+            // that cannot be sold yet (no connected merchant buys it, or not
+            // enough beer) sells far less often than the 0.6 assumed: about
+            // 1 in 4 in the measured games (docs/research/ai-invest-a9.md).
+            // 'a8' keeps 0.6 (up to Assignment 8).
+            if (options.sell === 'calibrated' && !saleReady(state, playerId, cand)) base = UNREADY_SALE_PROBABILITY;
             if (estimateRoundsRemaining(state) < 2) base -= 0.3;
         }
         return Math.max(0.1, Math.min(1, base));
+    }
+
+    // Measured sale rates (Assignment 9): a sellable tile built where it can
+    // already be sold sells about 0.9 of the time; one without a connected
+    // merchant or enough beer, about 0.25
+    const READY_SALE_PROBABILITY = 0.8;
+    const UNREADY_SALE_PROBABILITY = 0.25;
+
+    // Could a sellable tile at cand.cityId be sold now: a connected merchant
+    // buys it, and there is beer for it (own breweries anywhere, connected
+    // opponents' breweries, or one merchant barrel)?
+    function saleReady(state, playerId, cand) {
+        const connected = state.getConnectedLocations(cand.cityId);
+        const merchants = state.merchantTiles.filter(mt =>
+            mt.buys !== 'blank' && connected.has(mt.location) && state.merchantTileAccepts(mt, cand.industryType));
+        if (merchants.length === 0) return false;
+        const need = (cand.tileData && cand.tileData.beersToSell) || 0;
+        if (need === 0) return true;
+        const beer = state.findBeerSources(cand.cityId, playerId, null).length + (merchants.some(mt => mt.hasBeer) ? 1 : 0);
+        return beer >= need;
+    }
+
+    // Research variant (Assignment 9, options.sell 'connect'): what a link is
+    // worth for the player's own unsold sellable tiles that it would connect
+    // to a merchant buying them (the rise in their chance of being sold)
+    function connectSaleValue(state, playerId, cand) {
+        const own = Object.entries(state.boardIndustries).filter(([, t]) =>
+            t.playerId === playerId && !t.flipped && isSellableIndustry(t.type));
+        if (own.length === 0) return 0;
+        const buyer = (cityId, type) => {
+            const connected = state.getConnectedLocations(cityId);
+            return state.merchantTiles.some(mt => mt.buys !== 'blank' && connected.has(mt.location) && state.merchantTileAccepts(mt, type));
+        };
+        const waiting = own.filter(([key, t]) => !buyer(key.split('_')[0], t.type));
+        if (waiting.length === 0) return 0;
+        state.boardLinks[cand.connectionId] = { playerId, type: cand.type };
+        try {
+            let value = 0;
+            for (const [key, t] of waiting) {
+                if (buyer(key.split('_')[0], t.type)) {
+                    value += vpEquivalent(state, { vp: t.tileData.vp, income: t.tileData.income }) *
+                        (READY_SALE_PROBABILITY - UNREADY_SALE_PROBABILITY);
+                }
+            }
+            return value;
+        } finally {
+            delete state.boardLinks[cand.connectionId];
+        }
     }
 
     function playerOwnsLinkTouching(state, playerId, cityId) {
@@ -272,7 +332,8 @@ const AIPlayer = (() => {
         const explorationBonus = Math.max(0, 1.6 - linksBuilt * 0.3);
 
         return vpEquivalent(state, { vp: accessGain * 1.0 + merchantGain, money: -cand.cost })
-            + explorationBonus - overNetworkingPenalty;
+            + explorationBonus - overNetworkingPenalty
+            + (options.sell === 'connect' ? connectSaleValue(state, playerId, cand) : 0);
     }
 
     function bestNetwork(state, logic, playerId) {
@@ -307,6 +368,13 @@ const AIPlayer = (() => {
     // ------------------------------------------------------------------
 
     function scoreDevelopPlan(state, logic, playerId) {
+        // Research variant (Assignment 9, options.develop 'horizon'): no
+        // Develop in the game's last two rounds, when the industries it
+        // unlocks are almost never built (2% of the time in the measured games)
+        if (options.develop === 'horizon') {
+            const gameRoundsLeft = state.getRoundsRemaining() + (state.era === ERA.CANAL ? ROUNDS_PER_ERA[state.numPlayers] : 0);
+            if (gameRoundsLeft <= 2) return null;
+        }
         const types = logic.getDevelopableTypes(playerId);
         const ironSources = state.findIronSource(playerId);
         if (types.length === 0 || ironSources.length === 0) return null;
@@ -637,7 +705,10 @@ const AIPlayer = (() => {
     //   explain:     true adds `explain` (every candidate's score) to the decision
     //   loan:        loan-scoring variant (see scoreLoanResult; default 'a6')
     //   overbuild:   overbuild scoring (see scoreBuildCandidate; default 'opportunity')
-    // AIPlayer.LEGACY_A5 / LEGACY_A6 restore the AI of those assignments.
+    //   develop:     'a8' (default) | research variant 'horizon' (see scoreDevelopPlan)
+    //   sell:        'calibrated' (default; estimateFlipProbability) | 'a8' (up to Assignment 8)
+    //                | research variant 'connect' (scoreNetworkCandidate; A8 sale probabilities)
+    // AIPlayer.LEGACY_A5 / LEGACY_A6 / LEGACY_A8 restore the AI of those assignments.
     function chooseAction(state, logic, playerId, difficulty = 'normal', rng = null, opts = null) {
         const previous = options;
         options = opts ? { ...DEFAULT_OPTIONS, ...opts } : DEFAULT_OPTIONS;
@@ -698,7 +769,7 @@ const AIPlayer = (() => {
         return chosen;
     }
 
-    return { chooseAction, LEGACY_A5, LEGACY_A6, roundsRemaining: (state, opts = null) => {
+    return { chooseAction, LEGACY_A5, LEGACY_A6, LEGACY_A8, roundsRemaining: (state, opts = null) => {
         const previous = options;
         options = opts ? { ...DEFAULT_OPTIONS, ...opts } : DEFAULT_OPTIONS;
         try { return estimateRoundsRemaining(state); } finally { options = previous; }

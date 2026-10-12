@@ -77,14 +77,15 @@ function randomPolicy(ctx, d) {
 // AI variants. For each level:
 //   <level>           the current production AI
 //   <level>~a6        the AI of Assignments 6-7 (AIPlayer.LEGACY_A6)
+//   <level>^a8        the AI of Assignment 8 (AIPlayer.LEGACY_A8; same as ~opportunity)
 //   <level>-a5        the Assignment 5 baseline, AIPlayer.LEGACY_A5: reads
 //                     opponents' hands (Hard) and uses the old rounds estimate
 //   <level>-fairinfo  the baseline with ONLY the information correction
 //   <level>-rounds    the baseline with ONLY the rounds correction
 const LEGACY = (E) => E.AIPlayer.LEGACY_A5;
 // (Assignment 6 variants keep the overbuild scoring of their time)
-const FAIR_INFO_ONLY = { information: 'player', rounds: 'deck-estimate', overbuild: 'a6' };
-const ROUNDS_ONLY = { information: 'full', rounds: 'engine', overbuild: 'a6' };
+const FAIR_INFO_ONLY = { information: 'player', rounds: 'deck-estimate', overbuild: 'a6', sell: 'a8' };
+const ROUNDS_ONLY = { information: 'full', rounds: 'engine', overbuild: 'a6', sell: 'a8' };
 
 const POLICIES = { random: randomPolicy };
 for (const level of ['easy', 'normal', 'hard']) {
@@ -104,7 +105,7 @@ POLICIES['hard-fair'] = aiPolicy('hard', LEGACY, 'resample');
 // and +never (a no-loan ablation)
 for (const level of ['easy', 'normal', 'hard']) {
     for (const loan of ['a6', 'cashflow', 'enabling', 'cashflow+enabling', 'never']) {
-        POLICIES[`${level}+${loan}`] = aiPolicy(level, { loan, overbuild: 'a6' });
+        POLICIES[`${level}+${loan}`] = aiPolicy(level, { loan, overbuild: 'a6', sell: 'a8' });
     }
 }
 // Overbuild-scoring variants (Assignment 8, options.overbuild): <level>~a6
@@ -112,11 +113,20 @@ for (const level of ['easy', 'normal', 'hard']) {
 // since Assignment 8), ~opportunity-unflipped, ~no-unflipped
 for (const level of ['easy', 'normal', 'hard']) {
     for (const overbuild of ['a6', 'opportunity', 'opportunity-unflipped', 'no-unflipped']) {
-        POLICIES[`${level}~${overbuild}`] = aiPolicy(level, { overbuild });
+        POLICIES[`${level}~${overbuild}`] = aiPolicy(level, { overbuild, sell: 'a8' });   // the AI of that time
     }
 }
+// Investment variants (Assignment 9, options.develop / options.sell), on the
+// Assignment 8 AI: <level>^develop-horizon, ^sell-calibrated (adopted: the
+// production AI since Assignment 9), ^sell-connect
+for (const level of ['easy', 'normal', 'hard']) {
+    POLICIES[`${level}^a8`] = aiPolicy(level, { sell: 'a8' });
+    POLICIES[`${level}^develop-horizon`] = aiPolicy(level, { develop: 'horizon', sell: 'a8' });
+    POLICIES[`${level}^sell-calibrated`] = aiPolicy(level, { sell: 'calibrated' });
+    POLICIES[`${level}^sell-connect`] = aiPolicy(level, { sell: 'connect' });
+}
 const levelOf = (policy) => {
-    const level = policy.split(/[-+~]/)[0];
+    const level = policy.split(/[-+~^]/)[0];
     return ['easy', 'normal', 'hard'].includes(level) ? level : 'hard';
 };
 

@@ -297,10 +297,15 @@ For each, use the same pre-registered, held-out procedure.
 Everything is deterministic with Node.js 22+. Raw results go to the
 git-ignored `research-a8/` folder.
 
+Since Assignment 9 the production AI sells differently. The `<level>~…`
+policies below are pinned to the selling of their time, so they reproduce
+unchanged. Commands that ran the production AI of Assignment 8 now need
+`--sell a8` (or `--baseline a8`), as shown.
+
 ```
 # Investigation (about 20 s per level and player count)
-node scripts/research/ai-overbuild.js --players 3 --seeds 100 --levels easy,normal,hard --overbuild a6   # and 2, 4
-node scripts/research/ai-overbuild.js --players 3 --seeds 100 --levels normal --overbuild opportunity    # and 2, 4
+node scripts/research/ai-overbuild.js --players 3 --seeds 100 --levels easy,normal,hard --overbuild a6 --sell a8   # and 2, 4
+node scripts/research/ai-overbuild.js --players 3 --seeds 100 --levels normal --overbuild opportunity --sell a8   # and 2, 4
 
 # Exploration
 P=normal~opportunity:normal~a6,normal~opportunity-unflipped:normal~a6,normal~no-unflipped:normal~a6
@@ -324,11 +329,11 @@ node scripts/research/ai-baseline.js matchups --players 2 --seeds 100 --base-see
 node scripts/research/ai-criteria.js research-a8/explore-*.json        # and validate-*, general-*
 node scripts/research/ai-compare.js research-a8/mirror-*.json \
     --pairs normal~opportunity:normal~a6,normal~opportunity-unflipped:normal~a6,normal~no-unflipped:normal~a6
-node scripts/research/ai-loans.js --players 3 --seeds 100 --levels normal       # loans after the change; and 2, 4
-node scripts/research/ai-audit.js --games 10                                    # the new production AI
+node scripts/research/ai-loans.js --players 3 --seeds 100 --levels normal --sell a8   # loans after the change; and 2, 4
+node scripts/research/ai-audit.js --games 10 --baseline a8                      # the Assignment 8 production AI
 
 # Fixtures (re-record only for an intended AI change)
-node scripts/research/record-ai-baseline.js --preset current   # test/fixtures/assignment8-baseline.json
+node scripts/research/record-ai-baseline.js --preset a8        # test/fixtures/assignment8-baseline.json
 node scripts/research/record-ai-baseline.js --preset a6        # test/fixtures/assignment6-baseline.json
 ```
 

@@ -33,7 +33,7 @@ choose moves and present what happened; neither advances the game. See
 | `js/gameLogic.js` | Rules queries (targets, costs, sources), the older `execute*` wrappers, and `getDisabledReason()` |
 | `js/moves.js` | The move engine: move format, planners and choice points, `getLegalMoves` / `applyMove` / `getNextChoice` ([`moves.md`](moves.md)) |
 | `js/progression.js` | Game progression: `getCurrentDecision` / `play` / `runGame` ([`engine.md`](engine.md)) |
-| `js/aiPlayer.js` | Heuristic AI opponent (Easy / Normal / Hard). It decides on the player's observation (`getObservation`), never the full state. It charges an overbuild of its own tile for the replaced tile's value. `AIPlayer.LEGACY_A5` and `LEGACY_A6` reproduce earlier AIs for research |
+| `js/aiPlayer.js` | Heuristic AI opponent (Easy / Normal / Hard). It decides on the player's observation (`getObservation`), never the full state. It charges an overbuild of its own tile for the replaced tile's value, and values a sellable tile that cannot be sold yet with its measured sale probability. `AIPlayer.LEGACY_A5`, `LEGACY_A6` and `LEGACY_A8` reproduce earlier AIs for research |
 | `js/industryIcons.js` | Engraved industry illustrations shared by the board and the hand cards |
 | `js/actionIcons.js` | Action button icons |
 | `js/boardAssets.js` | The bundled board and component artwork, and the measured board layout ([`board-artwork.md`](board-artwork.md)) |

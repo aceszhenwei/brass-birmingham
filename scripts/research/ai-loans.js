@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Assignment 7: how and why the AI borrows.
 //
-//   node scripts/research/ai-loans.js [--players 3] [--seeds 50] [--levels normal] [--loan a6] [--overbuild a6] [--examples 3]
+//   node scripts/research/ai-loans.js [--players 3] [--seeds 50] [--levels normal] [--loan a6] [--overbuild a6] [--sell a8] [--examples 3]
 //
 // Plays mirror games (every seat the same level, seeds 200000 + 1000 *
 // players + i as in ai-baseline.js) with the AI's diagnostics on, and for
@@ -21,7 +21,8 @@
 // Separately, a loan is "followed by a shortfall" when the player owed an
 // income shortfall later in the same era.
 // --loan selects a loan-scoring variant (see js/aiPlayer.js, options.loan);
-// --overbuild a6 runs on the AI of Assignments 6-7, which Assignment 7 studied.
+// --overbuild a6 --sell a8 runs on the AI of Assignments 6-7, which Assignment 7
+// studied (--sell a8 alone: the AI of Assignment 8).
 
 'use strict';
 
@@ -37,6 +38,7 @@ const SEEDS = Number(arg('seeds', 50));
 const LEVELS = String(arg('levels', 'normal')).split(',');
 const LOAN = arg('loan', null);
 const OVERBUILD = arg('overbuild', null);
+const SELL = arg('sell', null);
 const EXAMPLES = Number(arg('examples', 3));
 const E = loadEngine();
 const A = E.ACTIONS;
@@ -68,7 +70,7 @@ for (const level of LEVELS) {
         const state = new E.GameState(PLAYERS, names, names.map(() => ({ isAI: true, difficulty: level })), { seed });
         const logic = new E.GameLogic(state);
         const aiRng = new E.SeededRandom(aiSeedFor(seed));
-        const opts = { explain: true, ...(LOAN ? { loan: LOAN } : {}), ...(OVERBUILD ? { overbuild: OVERBUILD } : {}) };
+        const opts = { explain: true, ...(LOAN ? { loan: LOAN } : {}), ...(OVERBUILD ? { overbuild: OVERBUILD } : {}), ...(SELL ? { sell: SELL } : {}) };
         const open = [];            // loans still waiting for their follow-up actions
         const history = [];         // per move: { id, era, type, spent }
         for (let d = logic.getCurrentDecision(); d.type !== 'gameOver'; d = logic.getCurrentDecision()) {
