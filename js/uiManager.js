@@ -13,7 +13,7 @@ class UIManager {
         this.actionStep = 0; // Multi-step action tracking
         this.pendingData = {}; // Data accumulated during multi-step actions
         this.gameLog = []; // Game log entries
-        this.previousPlayerId = null; // Track player changes for transitions
+        this.turnPlayerId = null; // whose turn was last announced (turn transitions)
     }
 
     init(gameState, gameLogic, boardRenderer) {
@@ -28,9 +28,9 @@ class UIManager {
         this.bindEvents();
         this.addLogEntry(null, `Game started with ${this.state.numPlayers} players`, 'system');
         this.addLogEntry(null, `Canal Era`, 'era');
-        this.previousPlayerId = this.state.currentPlayerId;
+        this.turnPlayerId = this.state.currentPlayerId;
         this.refresh();
-        this.runAITurnLoop(); // in case the first seat is AI-controlled
+        this.continueGame(); // in case the first seat is AI-controlled
     }
 
     // ========================================================================
@@ -1016,9 +1016,11 @@ class UIManager {
         this.playMove(playerId, move);
     }
 
-    // Every action — human or AI — is played through the engine's applyMove
+    // Every decision — human or AI, action or shortfall — is played through
+    // the engine, which also advances the game (turns, rounds, income, era
+    // scoring, game end) and reports what happened as events.
     playMove(playerId, move) {
-        const result = this.logic.applyMove(playerId, move);
+        const result = this.logic.play(playerId, move);
         if (result.success) {
             const msg = result.message;
             this.addLogEntry(playerId, msg.charAt(0).toLowerCase() + msg.slice(1));
@@ -1073,27 +1075,10 @@ class UIManager {
         });
     }
 
-    // Income shortfalls are decisions too: each player who can't pay chooses
-    // which tiles to sell (AI seats use the engine's automatic policy).
-    // Calls done() once every shortfall is covered.
-    resolvePendingShortfalls(done) {
-        const pending = this.state.getPendingShortfalls();
-        if (pending.length === 0) {
-            done();
-            return;
-        }
-        const playerId = pending[0];
+    // A human player who can't pay their income chooses which tile to sell
+    // (one shortfall move at a time, until covered)
+    promptShortfall(playerId) {
         const player = this.state.players[playerId];
-        const play = (tile) => {
-            const result = this.logic.applyMove(playerId, { type: 'shortfall', tile });
-            if (result.success) this.addLogEntry(playerId, result.message);
-            this.closeModal();
-            this.resolvePendingShortfalls(done);
-        };
-        if (player.isAI) {
-            play(this.state.defaultShortfallTile(playerId));
-            return;
-        }
         const options = this.logic.getLegalMoves(playerId).map(m => {
             const farm = BREWERY_FARMS[m.tile];
             const tile = farm ? this.state.breweryFarmTiles[m.tile] : this.state.boardIndustries[m.tile];
@@ -1106,7 +1091,10 @@ class UIManager {
             kind: 'shortfall',
             prompt: `${player.name} is £${-player.money} short of paying their income. Choose an industry tile to sell for half its cost (repeat until covered).`,
             options,
-        }, play);
+        }, (tile) => {
+            this.closeModal();
+            this.playMove(playerId, { type: 'shortfall', tile });
+        });
     }
 
     completeAction(result) {
@@ -1114,7 +1102,8 @@ class UIManager {
             this.showToast(result.message, 'success');
         } else {
             this.showToast(result.message, 'error');
-            if (this.state.currentPlayer.isAI && !this.state.gameOver) {
+            const decision = this.logic.getCurrentDecision();
+            if (decision.type === 'action' && this.state.players[decision.playerId].isAI) {
                 // A failed AI action must never stall the game
                 this.recoverAITurn(result.message);
                 return;
@@ -1123,8 +1112,6 @@ class UIManager {
             return;
         }
 
-        const previousPlayerId = this.state.currentPlayerId;
-
         // Reset action state
         this.selectedAction = null;
         this.actionStep = 0;
@@ -1132,70 +1119,74 @@ class UIManager {
         this.selectedCard = null;
         this.renderer.clearHighlights();
 
-        const turnResult = this.state.advanceTurn();
-
-        // Surface end-of-round upkeep events (income shortfall VP losses)
-        for (const ev of this.state.lastRoundEvents || []) {
-            this.addLogEntry(ev.playerId, ev.message);
-        }
-        this.state.lastRoundEvents = [];
-
-        // Players who can't pay their income choose tiles to sell before
-        // anything else happens (and before an era is scored)
-        this.resolvePendingShortfalls(() => this.afterTurnAdvance(turnResult, previousPlayerId));
-    }
-
-    afterTurnAdvance(turnResult, previousPlayerId) {
-        if (turnResult === 'endCanalEra') {
-            this.addLogEntry(null, 'Canal Era Scoring', 'era');
-            const scores = this.state.endCanalEra();
-            this.addLogEntry(null, 'Rail Era', 'era');
-            this.refresh();
-            this.showScoring('Canal Era Complete', scores);
-            // runAITurnLoop() resumes from the scoring modal's Continue button
-            // (see showScoring) — never auto-continue while it's blocking the screen.
-            return;
-        } else if (turnResult === 'endGame') {
-            this.addLogEntry(null, 'Final Scoring', 'era');
-            const scores = this.state.endGame();
-            this.refresh();
-            this.showGameOver(scores);
-            return;
-        } else {
-            // Check if player changed - show transition
-            const newPlayerId = this.state.currentPlayerId;
-            if (newPlayerId !== previousPlayerId) {
-                this.addLogEntry(null, `${this.state.currentPlayer.name}'s turn`, 'system');
-                this.showTurnTransition(this.state.currentPlayer);
+        // Present what the engine did: end-of-round notices, shortfalls,
+        // era scoring, game end
+        for (const ev of result.events || []) {
+            if (ev.type === 'roundEnd') {
+                for (const n of ev.notices) this.addLogEntry(n.playerId, n.message);
+            } else if (ev.type === 'shortfall') {
+                ev.playerIds.forEach((id, i) => this.addLogEntry(id, `must cover an income shortfall of £${ev.owed[i]}`));
+            } else if (ev.type === 'eraEnd') {
+                this.addLogEntry(null, 'Canal Era Scoring', 'era');
+                this.addLogEntry(null, 'Rail Era', 'era');
+                this.refresh();
+                // The game continues from the scoring screen's Continue button
+                this.showScoring('Canal Era Complete', ev.scores);
+                return;
+            } else if (ev.type === 'gameEnd') {
+                this.addLogEntry(null, 'Final Scoring', 'era');
+                this.refresh();
+                this.showGameOver(ev.ranking);
+                return;
             }
         }
+        this.continueGame();
+    }
 
-        this.previousPlayerId = previousPlayerId;
+    // Ask the engine what the game is waiting for and get it: a shortfall
+    // decision (AI seats use the engine's automatic choice; humans are
+    // prompted), an AI turn, or a human turn.
+    continueGame() {
+        const decision = this.logic.getCurrentDecision();
+        if (decision.type === 'gameOver') return;
+        if (decision.type === 'shortfall') {
+            if (this.state.players[decision.playerId].isAI) {
+                this.playMove(decision.playerId, this.logic.defaultShortfallMove(decision.playerId));
+            } else {
+                this.promptShortfall(decision.playerId);
+            }
+            return;
+        }
+        const changed = decision.playerId !== this.turnPlayerId;
+        if (changed) {
+            this.addLogEntry(null, `${this.state.players[decision.playerId].name}'s turn`, 'system');
+            this.showTurnTransition(this.state.players[decision.playerId]);
+            this.turnPlayerId = decision.playerId;
+        }
         this.refresh();
-        this.runAITurnLoop();
+        this.runAITurnLoop(changed ? 1600 : 800);
     }
 
     // ========================================================================
     // AI Turn Loop
     // ========================================================================
 
-    runAITurnLoop() {
-        if (this.state.gameOver) return;
-        const player = this.state.currentPlayer;
-        if (!player.isAI) {
+    runAITurnLoop(delay = 1600) {
+        const decision = this.logic.getCurrentDecision();
+        if (decision.type !== 'action' || !this.state.players[decision.playerId].isAI) {
             this.setAIOverlay(false);
             return;
         }
         this.setAIOverlay(true);
-        const delay = this.state.currentPlayerId !== this.previousPlayerId ? 1600 : 800;
         setTimeout(() => this.executeOneAITurn(), delay);
     }
 
     executeOneAITurn() {
-        if (this.state.gameOver) return;
-        const playerId = this.state.currentPlayerId;
+        const turn = this.logic.getCurrentDecision();
+        if (turn.type !== 'action') return; // safety guard against stale timers
+        const playerId = turn.playerId;
         const player = this.state.players[playerId];
-        if (!player.isAI) return; // safety guard against stale timers
+        if (!player.isAI) return;
 
         let decision;
         try {
@@ -1222,11 +1213,7 @@ class UIManager {
         this.selectedCard = null;
         this.closeModal();
 
-        const hasCard = this.state.players[playerId].hand.length > 0;
-        const passResult = hasCard
-            ? this.logic.executePass(playerId, 0)
-            : { success: true, message: 'Skipped (no cards)' };
-        this.completeAction(passResult);
+        this.playMove(playerId, { type: ACTIONS.PASS, card: 0 });
     }
 
     setAIOverlay(active) {
@@ -1340,8 +1327,7 @@ class UIManager {
 
         const continueFromScoring = () => {
             overlay.classList.add('hidden');
-            this.refresh();
-            this.runAITurnLoop(); // only safe to resume AFTER the modal is dismissed
+            this.continueGame(); // only safe to resume AFTER the modal is dismissed
         };
         document.getElementById('scoring-continue-btn').onclick = continueFromScoring;
 
@@ -1352,23 +1338,20 @@ class UIManager {
         }
     }
 
-    showGameOver(scores) {
+    // ranking: GameState.getFinalRanking() — VP, then income level, then
+    // money (rulebook p.7); fully tied players share a rank
+    showGameOver(ranking) {
         const overlay = document.getElementById('gameover-overlay');
 
-        // Rulebook: ties broken by highest income level, then most money
-        const sorted = [...this.state.players].sort((a, b) =>
-            (b.vp - a.vp) ||
-            (this.state.getIncomeLevel(b.id) - this.state.getIncomeLevel(a.id)) ||
-            (b.money - a.money));
-
         let html = '<table class="scoring-table"><thead><tr><th>Rank</th><th>Player</th><th>VP</th><th>Income</th><th>Money</th></tr></thead><tbody>';
-        sorted.forEach((p, i) => {
-            html += `<tr${i === 0 ? ' class="total-row"' : ''}>
-                <td>${i + 1}</td>
+        ranking.forEach(r => {
+            const p = this.state.players[r.playerId];
+            html += `<tr${r.rank === 1 ? ' class="total-row"' : ''}>
+                <td>${r.rank}</td>
                 <td style="color:${p.color}">${p.name}</td>
-                <td>${p.vp}</td>
-                <td>${this.state.getIncomeLevel(p.id)}</td>
-                <td>£${p.money}</td>
+                <td>${r.vp}</td>
+                <td>${r.incomeLevel}</td>
+                <td>£${r.money}</td>
             </tr>`;
         });
         html += '</tbody></table>';

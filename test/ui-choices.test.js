@@ -68,30 +68,44 @@ test('no prompt when the rules leave no choice', () => {
     assert.equal(ui.actionStep, 1);
 });
 
-test('a human with an income shortfall chooses which tile to sell', () => {
-    const { E, state, ui, prompts } = uiSetup();
+test('a human with an income shortfall is prompted by the engine-driven flow and chooses the tile', () => {
+    const { E, state, logic, ui, prompts } = uiSetup();
     const T = E.INDUSTRY_TYPES;
     placeIndustry(E, state, 'birmingham_0', 1, T.COTTON_MILL, 1);   // £6
     placeIndustry(E, state, 'coventry_0', 1, T.POTTERY, 1);         // £8
+    setHand(state, state.currentPlayerId, [loc('leek')]);
     state.players[1].money = -3;
-    let done = false;
-    ui.resolvePendingShortfalls(() => { done = true; });
-    assert.equal(done, false, 'waits for the player');
+    assert.deepEqual({ ...logic.getCurrentDecision() }, { type: 'shortfall', playerId: 1, owed: 3 });
+    ui.continueGame();
+    assert.equal(prompts.length, 1, 'the player is asked');
     assert.equal(prompts[0].choice.kind, 'shortfall');
     assert.deepEqual([...prompts[0].choice.options.map(o => o.value)].sort(), ['birmingham_0', 'coventry_0']);
     prompts[0].onPick('coventry_0');
-    assert.equal(done, true);
     assert.equal(state.players[1].money, 5);
     assert.ok(state.boardIndustries.birmingham_0);
+    assert.equal(logic.getCurrentDecision().type, 'action', 'play resumes');
+    assert.ok(ui.gameLog.some(e => /sold Pottery Lv1/.test(e.message)));
 });
 
-test('an AI seat with an income shortfall is resolved automatically', () => {
-    const { E, state, ui, prompts } = uiSetup({ ai: true });
+test('an AI seat with an income shortfall is resolved automatically, then its turn is scheduled', () => {
+    const { E, dom, state, ui, prompts } = uiSetup({ ai: true });
     placeIndustry(E, state, 'birmingham_0', 2, E.INDUSTRY_TYPES.COTTON_MILL, 1);
+    for (const p of state.players) setHand(state, p.id, [loc('leek')]);
     state.players[2].money = -2;
-    let done = false;
-    ui.resolvePendingShortfalls(() => { done = true; });
+    ui.continueGame();
     assert.equal(prompts.length, 0);
-    assert.equal(done, true);
     assert.equal(state.players[2].money, 4);
+    assert.ok(dom.timers.length > 0, 'the next AI turn is scheduled');
+});
+
+test('the UI hands progression to the engine: a played move advances the turn and announces it', () => {
+    const { state, ui } = uiSetup();
+    for (const p of state.players) setHand(state, p.id, [loc('leek'), loc('stone')]);
+    const first = state.currentPlayerId;
+    ui.turnPlayerId = first;
+    ui.selectedAction = 'pass';
+    ui.selectedCard = 0;
+    ui.processActionStep();
+    assert.notEqual(state.currentPlayerId, first, 'round 1: one action, then the next player');
+    assert.ok(ui.gameLog.some(e => e.message === `${state.currentPlayer.name}'s turn`));
 });

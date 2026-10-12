@@ -283,6 +283,20 @@ everything the rulebook lets them choose:
 
 See [`docs/moves.md`](docs/moves.md).
 
+### Engine-Run Games (engine API)
+
+The engine runs the whole game: turns, rounds, income, shortfall decisions,
+era scoring and transitions, and final scoring with the ranking. The UI and
+the AI only choose moves:
+
+```js
+logic.getCurrentDecision()     // { type: 'action' | 'shortfall' | 'gameOver', playerId, ... }
+logic.play(playerId, move)     // validates, applies, advances; returns what happened as events
+logic.runGame(chooseMove)      // a complete headless game, start to final scoring
+```
+
+See [`docs/engine.md`](docs/engine.md).
+
 ### Tips for New Players
 
 - **Build breweries early** — Beer is the most contested resource in the game
@@ -322,19 +336,20 @@ fallback.
 | `js/gameData.js` | All constants: tiles, cities, connections, cards, merchants, markets |
 | `js/random.js` | `SeededRandom`: the seeded, serializable generator behind every shuffle |
 | `js/moves.js` | Move engine: move format, planners and choice points, `getLegalMoves` / `applyMove` / `getNextChoice` |
+| `js/progression.js` | Game progression: `getCurrentDecision` / `play` / `runGame` — turns, rounds, income, shortfalls, eras, final scoring |
 | `js/gameState.js` | Game state, market mechanics, network pathfinding, turn management, clone / serialize / restore |
 | `js/gameLogic.js` | Rules queries (targets, costs, sources), legacy `execute*` wrappers, `getDisabledReason()` |
 | `js/industryIcons.js` | Engraved industry illustrations shared by the board and hand cards |
 | `js/boardAssets.js` | Bundled board/component artwork + measured board layout |
 | `js/boardRenderer.js` | SVG board: procedural terrain, frame + score track, calibration mode |
-| `js/uiManager.js` | Phase bar, card selection mode, game log, turn transitions, modals |
+| `js/uiManager.js` | Presents the game and collects decisions (phase bar, cards, choice dialogs, log, scoring screens); the engine drives progression |
 | `js/main.js` | Entry point, setup screen |
 | `js/aiPlayer.js` | Heuristic AI opponent (Easy / Normal / Hard) |
-| `test/*.test.js` | `node:test` suite: setup, all 7 actions, resources, turns/eras, scoring, regressions, determinism, cloning, serialization, legal moves, player choices, UI choice flow, AI and random games |
+| `test/*.test.js` | `node:test` suite: setup, all 7 actions, resources, turns/eras, scoring, regressions, determinism, cloning, serialization, legal moves, player choices, UI choice flow, game progression, AI and random games |
 | `test/helpers/` | Engine loader (`vm`), scenario builders, strict headless driver, state invariants, game fingerprints, DOM stub |
 | `test/fixtures/` | Games recorded from the Assignment 1 code, for behaviour comparison |
 | `scripts/simulate.js` | Headless AI-vs-AI regression run |
-| `docs/` | Rules audit, state model / save format, moves and choices, assignment reports |
+| `docs/` | Rules audit, engine architecture, state model / save format, moves and choices, assignment reports |
 
 ---
 

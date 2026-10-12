@@ -620,6 +620,9 @@ class GameState {
         // Call endRound to distribute income before signaling era end.
         const allHandsEmpty = this.players.every(p => p.hand.length === 0);
         if (allHandsEmpty && this.drawDeck.length === 0) {
+            // The last card of the era has been played: no turn is in
+            // progress any more (era scoring follows, after any shortfalls)
+            this.actionsThisTurn = 0;
             return this.endRound(); // returns 'endCanalEra' or 'endGame'
         }
 
@@ -855,7 +858,37 @@ class GameState {
         return scores;
     }
 
+    // The era is over once every card has been played: all hands and the
+    // draw deck are empty. (Between that moment and the era's scoring, only
+    // pending income-shortfall decisions can be outstanding.)
+    isEraOver() {
+        return this.drawDeck.length === 0 && this.players.every(p => p.hand.length === 0);
+    }
+
+    // Final standings (rulebook p.7): most VP wins; ties are broken by the
+    // highest income level, then the most money; players still tied share
+    // the rank (a draw).
+    getFinalRanking() {
+        const key = (p) => [p.vp, this.getIncomeLevel(p.id), p.money];
+        const sorted = [...this.players].sort((a, b) => {
+            const ka = key(a);
+            const kb = key(b);
+            return (kb[0] - ka[0]) || (kb[1] - ka[1]) || (kb[2] - ka[2]);
+        });
+        let rank = 0;
+        let previous = null;
+        return sorted.map((p, i) => {
+            const k = key(p).join();
+            if (k !== previous) rank = i + 1;
+            previous = k;
+            return { playerId: p.id, name: p.name, vp: p.vp, incomeLevel: this.getIncomeLevel(p.id), money: p.money, rank };
+        });
+    }
+
     endGame() {
+        if (this.getPendingShortfalls().length > 0) {
+            throw new Error('Income shortfalls must be covered before final scoring');
+        }
         // Score rail era
         const scores = this.calculateEraScore();
         this.gameOver = true;

@@ -5,7 +5,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { newGame, plain, loc, setHand, placeIndustry, placeLink } = require('./helpers/scenario');
-const { advance } = require('./helpers/headless');
 
 const ROUNDS = { 2: 10, 3: 9, 4: 8 };
 
@@ -13,18 +12,17 @@ test('Round 1 of the Canal Era has one action per player, later rounds two', () 
     const { state, logic } = newGame({ players: 3, seed: 3 });
     for (let i = 0; i < 3; i++) {
         assert.equal(state.round, 1);
-        assert.equal(logic.executePass(state.currentPlayerId, 0).success, true);
-        advance(state);
+        assert.equal(logic.getCurrentDecision().actionsLeft, 1);
+        assert.equal(logic.play(state.currentPlayerId, { type: 'pass', card: 0 }).success, true);
     }
     assert.equal(state.round, 2);
     assert.equal(state.actionsPerTurn, 2);
     const first = state.currentPlayerId;
-    logic.executePass(first, 0);
-    advance(state);
+    assert.equal(logic.getCurrentDecision().actionsLeft, 2);
+    logic.play(first, { type: 'pass', card: 0 });
     assert.equal(state.currentPlayerId, first, 'same player takes a second action');
     assert.equal(state.players[first].hand.length, 7);
-    logic.executePass(first, 0);
-    advance(state);
+    logic.play(first, { type: 'pass', card: 0 });
     assert.notEqual(state.currentPlayerId, first);
     assert.equal(state.players[first].hand.length, 8, 'hand refilled after the turn');
 });
@@ -41,16 +39,13 @@ test('Turn order: least money spent goes first; ties keep their relative order',
 for (const players of [2, 3, 4]) {
     test(`${players} players: each era lasts exactly ${ROUNDS[players]} rounds`, () => {
         const { state, logic } = newGame({ players, seed: 20 + players });
-        const roundsAt = {};
-        let steps = 0;
-        while (!state.gameOver && steps++ < 1000) {
-            logic.executePass(state.currentPlayerId, 0);
-            const { event, roundsPlayed } = advance(state);
-            if (event) roundsAt[event] = roundsPlayed;
-        }
+        const lastRound = {};
+        logic.runGame(() => ({ type: 'pass', card: 0 }), {
+            onMove: (r) => { for (const ev of r.events) if (ev.type === 'roundEnd') lastRound[ev.era] = ev.round; },
+        });
         assert.equal(state.gameOver, true);
-        assert.equal(roundsAt.endCanalEra, ROUNDS[players]);
-        assert.equal(roundsAt.endGame, ROUNDS[players]);
+        assert.equal(lastRound.canal, ROUNDS[players]);
+        assert.equal(lastRound.rail, ROUNDS[players]);
     });
 }
 
