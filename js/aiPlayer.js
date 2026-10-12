@@ -387,6 +387,9 @@ const AIPlayer = (() => {
         const cardIndex = pickCardIndex(logic, playerId, ACTIONS.NETWORK, null, player);
         if (cardIndex === null) return null;
 
+        // Research diagnostics: every single-link target's score (options.explain)
+        const networks = options.explain
+            ? targets.map(t => ({ connectionId: t.connectionId, score: scoreNetworkCandidate(state, logic, playerId, t) })) : undefined;
         const double = options.network === 'double' ? bestDoubleRail(state, logic, playerId, targets, cardIndex) : null;
         if (double && double.score > bestScore) {
             return {
@@ -394,6 +397,7 @@ const AIPlayer = (() => {
                 pendingData: { connectionId: double.first, connectionId2: double.second },
                 cardIndex,
                 score: double.score,
+                networks,
             };
         }
         return {
@@ -401,6 +405,7 @@ const AIPlayer = (() => {
             pendingData: { connectionId: best.connectionId },
             cardIndex,
             score: bestScore,
+            networks,
         };
     }
 
@@ -916,7 +921,8 @@ const AIPlayer = (() => {
             return { action: ACTIONS.PASS, pendingData: {}, cardIndex: 0 };
         }
 
-        const unperturbed = options.explain ? results.map(r => ({ action: r.action, score: r.score, parts: r.parts, builds: r.builds })) : null;
+        const unperturbed = options.explain ? results.map(r => ({ action: r.action, score: r.score, parts: r.parts, builds: r.builds, networks: r.networks,
+            pendingData: r.pendingData, cardIndex: r.cardIndex })) : null;
         const forced = applyDifficulty(state, logic, playerId, results, difficulty, random);
         results.sort((a, b) => b.score - a.score);
         const chosen = forced || results[0];
@@ -928,7 +934,22 @@ const AIPlayer = (() => {
         return chosen;
     }
 
-    return { chooseAction, chooseShortfall, LEGACY_A5, LEGACY_A6, LEGACY_A8, LEGACY_A9, roundsRemaining: (state, opts = null) => {
+    // Research helpers (scripts/research/planner.js): the AI's own valuation
+    // terms, for evaluating hypothetical positions. The game never calls them.
+    const research = {
+        flipProbability(state, logic, playerId, cand, opts = null) {
+            const previous = options;
+            options = opts ? { ...DEFAULT_OPTIONS, ...opts } : DEFAULT_OPTIONS;
+            try { return estimateFlipProbability(state, logic, playerId, cand); } finally { options = previous; }
+        },
+        vpEquivalent(state, parts, opts = null) {
+            const previous = options;
+            options = opts ? { ...DEFAULT_OPTIONS, ...opts } : DEFAULT_OPTIONS;
+            try { return vpEquivalent(state, parts); } finally { options = previous; }
+        },
+    };
+
+    return { chooseAction, chooseShortfall, research, LEGACY_A5, LEGACY_A6, LEGACY_A8, LEGACY_A9, roundsRemaining: (state, opts = null) => {
         const previous = options;
         options = opts ? { ...DEFAULT_OPTIONS, ...opts } : DEFAULT_OPTIONS;
         try { return estimateRoundsRemaining(state); } finally { options = previous; }

@@ -152,8 +152,40 @@ const A10_VARIANTS = {
 for (const level of ['easy', 'normal', 'hard']) {
     for (const [name, opts] of Object.entries(A10_VARIANTS)) POLICIES[`${level}%${name}`] = aiPolicy(level, { ...PRE_A10, ...opts });
 }
+// Planner variants (Assignment 11, scripts/research/planner.js), on the
+// production AI: <level>@p<depth>-<evaluate>[-<tag>], e.g. normal@p2-sum.
+// Depth 1 is the control (the planner's candidates and evaluation, no
+// lookahead). The planner decides on the player's observation only.
+const { createPlanner } = require('./planner');
+const PLANNERS = {};
+const PLANNER_CONFIGS = {
+    'p1-sum': { depth: 1, evaluate: 'sum' },
+    'p2-sum': { depth: 2, evaluate: 'sum' },
+    'p3-sum': { depth: 3, evaluate: 'sum' },
+    'p1-state': { depth: 1, evaluate: 'state' },
+    'p2-state': { depth: 2, evaluate: 'state' },
+    'p3-state': { depth: 3, evaluate: 'state' },
+    // Diagnostics (part 4 of the study): trust in moves beyond the current
+    // turn (gamma 0: plan within the turn only; gamma 1: full trust), and
+    // a narrower candidate set
+    'p2-sum-g0': { depth: 2, evaluate: 'sum', gamma: 0 },
+    'p2-sum-g1': { depth: 2, evaluate: 'sum', gamma: 1 },
+    'p2-sum-w3': { depth: 2, evaluate: 'sum', width: 3 },
+};
+function plannerPolicy(level, name, cfg) {
+    return (ctx, d) => {
+        const key = `${level}@${name}`;
+        const planner = PLANNERS[key] || (PLANNERS[key] = createPlanner(ctx.E, { ...cfg, level }));
+        const r = planner.choose(ctx.state, d.playerId);
+        if (r) return r.move;
+        return ctx.logic.moveFromDecision(ctx.E.AIPlayer.chooseAction(ctx.state, ctx.logic, d.playerId, level, ctx.aiRng));
+    };
+}
+for (const level of ['easy', 'normal', 'hard']) {
+    for (const [name, cfg] of Object.entries(PLANNER_CONFIGS)) POLICIES[`${level}@${name}`] = plannerPolicy(level, name, cfg);
+}
 const levelOf = (policy) => {
-    const level = policy.split(/[-+~^%]/)[0];
+    const level = policy.split(/[-+~^%@]/)[0];
     return ['easy', 'normal', 'hard'].includes(level) ? level : 'hard';
 };
 
@@ -333,4 +365,4 @@ function playMatch(E, { players, seed, seats, detailed = true, checkInvariantsEv
     return { players, seed, seats, startPosition, stats, final, ranking, moves };
 }
 
-module.exports = { POLICIES, playMatch, withOpponentHands, aiSeedFor, playableBuildCards };
+module.exports = { POLICIES, PLANNERS, PLANNER_CONFIGS, playMatch, withOpponentHands, aiSeedFor, playableBuildCards };
