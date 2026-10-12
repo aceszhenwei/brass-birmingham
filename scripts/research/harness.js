@@ -96,7 +96,18 @@ for (const level of ['easy', 'normal', 'hard']) {
 POLICIES['hard-blind'] = aiPolicy('hard', LEGACY, 'empty');
 // ...or a plausible (resampled) opponent hand instead of the real one
 POLICIES['hard-fair'] = aiPolicy('hard', LEGACY, 'resample');
-const levelOf = (policy) => (['easy', 'normal', 'hard'].includes(policy.split('-')[0]) ? policy.split('-')[0] : 'hard');
+// Loan-scoring variants (Assignment 7, js/aiPlayer.js options.loan), on the
+// current AI: <level>+a6 (the Assignment 6 loan heuristic), +cashflow,
+// +enabling, +cashflow+enabling, and +never (a no-loan ablation)
+for (const level of ['easy', 'normal', 'hard']) {
+    for (const loan of ['a6', 'cashflow', 'enabling', 'cashflow+enabling', 'never']) {
+        POLICIES[`${level}+${loan}`] = aiPolicy(level, { loan });
+    }
+}
+const levelOf = (policy) => {
+    const level = policy.split(/[-+]/)[0];
+    return ['easy', 'normal', 'hard'].includes(level) ? level : 'hard';
+};
 
 // ---------------------------------------------------------------------------
 // Statistics

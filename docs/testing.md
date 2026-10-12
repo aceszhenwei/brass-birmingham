@@ -31,6 +31,7 @@ so any gameplay code that bypasses the game's seeded generator fails the suite.
 | `progression.test.js` | Engine-controlled progression, saves at every lifecycle boundary |
 | `ai-simulation.test.js` | Complete AI-vs-AI and random legal-move games |
 | `ai-fairness.test.js` | AI information fairness. At every decision of complete games, every difficulty decides the same in an "alternate world" the player cannot tell apart: other hands, deck order, face-down cards and the game RNG are all changed. Choosing never changes the state, and observations match the player view. The legacy baseline's Hard leak is still detected |
+| `ai-loans.test.js` | The production AI replays 30 recorded games exactly (`fixtures/assignment6-baseline.json`). The default loan heuristic and the `explain` diagnostics don't change decisions. The research loan variants play legal, pure and reproducible games |
 | `ai-rounds.test.js` | `getRoundsRemaining` matches the round ends actually still to come at every decision of complete 2–4 player games, in both eras and across the era transition. The AI uses it, and the legacy baseline keeps the old estimate |
 
 `BRASS_SIM_GAMES=100 node --test test/*.test.js` raises the number of
@@ -47,6 +48,7 @@ complete games the suite plays per player count (default 10).
 | `test/helpers/fingerprint.js` | Compact game fingerprints for comparing games |
 | `test/helpers/dom.js` | A minimal DOM stub for the UI tests |
 | `test/fixtures/assignment1-baseline.json` | 300 games recorded from the Assignment 1 code |
+| `test/fixtures/assignment6-baseline.json` | 30 games recorded from the production AI after Assignments 6–7 (`scripts/research/record-a6-baseline.js`). Re-record it only for an intended AI change |
 
 ## Simulation
 

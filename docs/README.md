@@ -25,6 +25,7 @@ from, and how to run it. Everything more technical is here.
 - [`research/ai-baseline-audit.md`](research/ai-baseline-audit.md): an audit of the existing AI (Assignment 5). It covers how each difficulty decides; legality, fairness and hidden information; the baseline strength experiments; the measured weaknesses; and recommendations for the AI work.
 - [`research/ai-baseline-results.md`](research/ai-baseline-results.md): the full generated result tables.
 - [`research/ai-corrections-a6.md`](research/ai-corrections-a6.md): Assignment 6. It covers the fairness correction (the AI decides on the player's observation) and the exact rounds-remaining count; the preserved legacy baseline; the regression tests; and before-and-after experiments. Full tables are in [`research/ai-corrections-a6-results.md`](research/ai-corrections-a6-results.md).
+- [`research/ai-loans-a7.md`](research/ai-loans-a7.md): Assignment 7, on why the AI borrows so much. It tests three loan-scoring candidates against pre-registered criteria ([plan](research/ai-loans-a7-plan.md)), validates on held-out seeds, and records the decision to keep the production heuristic. Full tables are in [`research/ai-loans-a7-results.md`](research/ai-loans-a7-results.md).
 
 ## History
 

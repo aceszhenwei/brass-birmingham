@@ -14,7 +14,8 @@ record the limitations as they stood at each stage.
 
 - **The AI is heuristic** (Easy / Normal / Hard), inherited from upstream and unchanged by this fork apart from bug fixes.
 - **Fair information (since Assignment 6).** Every difficulty decides on the player's observation, so no AI sees opponents' hands, the deck order or the game RNG ([AI corrections](research/ai-corrections-a6.md)). The research baseline `AIPlayer.LEGACY_A5` keeps the old Hard leak on purpose and is not a fair benchmark.
-- **The AI is still weak, and its levels are close together.** The [AI audit](research/ai-baseline-audit.md) and the [Assignment 6 report](research/ai-corrections-a6.md) give the measurements. The remaining confirmed defects (the loan logic, overbuild scoring, over-development, careless discards) are scheduled for later work.
+- **The AI is still weak, and its levels are close together.** The [AI audit](research/ai-baseline-audit.md) and the [Assignment 6 report](research/ai-corrections-a6.md) give the measurements. The remaining confirmed defects (overbuild scoring, over-development, careless discards) are scheduled for later work.
+- **Frequent loans (about 5 per player per game).** Assignment 7 found these are mostly a rational response to the AI being chronically out of cash. No better loan rule was found, so the heuristic is kept ([loan research](research/ai-loans-a7.md)). The cash shortage comes from the spending heuristics.
 
 ## Engine
 

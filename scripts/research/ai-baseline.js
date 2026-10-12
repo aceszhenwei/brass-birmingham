@@ -17,8 +17,8 @@
 // hard-blind and hard-fair (the baseline Hard shown no / resampled opponent
 // hands); random (uniform legal moves). See scripts/research/harness.js.
 //
-// Game seeds are 200000 + 1000 * players + i (i = 1..N), distinct from the
-// seeds scripts/simulate.js and the tests use. Raw per-game results are
+// Game seeds are 200000 + 1000 * players + i (i = 1..N; --base-seed changes
+// the 200000), distinct from the seeds scripts/simulate.js and the tests use. Raw per-game results are
 // written as JSON (default research-results/<experiment>-<players>.json,
 // ignored by git); summarise them with scripts/research/ai-report.js.
 
@@ -43,7 +43,10 @@ const DEFAULT_PAIRS = 'hard-fairinfo:hard-a5,easy-rounds:easy-a5,normal-rounds:n
 const PAIRS = String(arg('pairs', DEFAULT_PAIRS)).split(',').map(p => p.split(':'));
 const LEVELS = String(arg('levels', 'easy,normal,hard')).split(',');
 const OUT = arg('out', path.join('research-results', `${experiment}-${PLAYERS.join('')}.json`));
-const seedFor = (players, i) => 200000 + 1000 * players + i;
+// --base-seed: the seed range (default 200000, the exploration seeds;
+// Assignment 7 validated on the held-out range 300000)
+const BASE_SEED = Number(arg('base-seed', 200000));
+const seedFor = (players, i) => BASE_SEED + 1000 * players + i;
 
 // Every distinct arrangement of `counts` policies over the seats
 function arrangements(items) {
