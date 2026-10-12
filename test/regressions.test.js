@@ -1,6 +1,6 @@
 'use strict';
 
-// Regression tests for the defects confirmed in docs/brass-review-findings.md.
+// Regression tests for the defects confirmed in docs/history/brass-review-findings.md.
 // Each test reproduces the reported failure; all of them fail on the code
 // before the Assignment 1 fixes.
 

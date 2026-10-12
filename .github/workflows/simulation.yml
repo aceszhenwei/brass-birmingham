@@ -1,0 +1,73 @@
+# Large headless simulation, started by hand from the Actions tab.
+# One job per player count. Every game is checked for rejected moves, engine
+# exceptions, broken state invariants, stalls, wrong round counts and
+# clone/restore divergence (see docs/testing.md).
+name: Large simulation
+
+on:
+  workflow_dispatch:
+    inputs:
+      games:
+        description: AI games per player count (difficulty rotates easy / normal / hard)
+        default: '100'
+        required: true
+      mixed:
+        description: Mixed-difficulty games per player count
+        default: '30'
+        required: true
+      random:
+        description: Random legal-move games per player count
+        default: '20'
+        required: true
+      first:
+        description: First AI game seed index (1-100 are also compared with the Assignment 1 baseline)
+        default: '1'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  simulate:
+    name: ${{ matrix.players }} players
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        players: [2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Simulate
+        env:
+          PLAYERS: ${{ matrix.players }}
+          GAMES: ${{ inputs.games }}
+          MIXED: ${{ inputs.mixed }}
+          RANDOM_GAMES: ${{ inputs.random }}
+          FIRST: ${{ inputs.first }}
+        run: |
+          set -o pipefail
+          for v in "$GAMES" "$MIXED" "$RANDOM_GAMES" "$FIRST"; do
+            [[ "$v" =~ ^[0-9]+$ ]] || { echo "::error::Inputs must be whole numbers (got '$v')"; exit 1; }
+          done
+          node scripts/simulate.js --players "$PLAYERS" --games "$GAMES" --mixed "$MIXED" \
+            --random "$RANDOM_GAMES" --first "$FIRST" | tee simulation.log
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### ${{ matrix.players }} players"
+            echo '```'
+            cat simulation.log 2>/dev/null || echo "No log: the simulation did not start."
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulation-${{ matrix.players }}p
+          path: simulation.log
+          if-no-files-found: ignore

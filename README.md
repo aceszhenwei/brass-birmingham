@@ -1,365 +1,109 @@
 # Brass: Birmingham
 
-[![Docs](https://img.shields.io/badge/docs-mintlify-18a34a?style=flat-square)](https://mintlify.com/npow/brass-birmingham)
+[![CI](https://github.com/aceszhenwei/brass-birmingham/actions/workflows/ci.yml/badge.svg)](https://github.com/aceszhenwei/brass-birmingham/actions/workflows/ci.yml)
 
-A digital adaptation of the award-winning board game by Roxley Games. Build your industrial empire across the English Midlands during the height of the Industrial Revolution (1770-1870).
+An unofficial digital adaptation of the board game **Brass: Birmingham**, for
+2–4 players in one browser (hotseat), with optional AI opponents. It runs
+straight from `index.html`, with no build step and no dependencies.
 
-> **Note:** This is an unofficial fan project. [Brass: Birmingham](https://roxley.com/products/brass-birmingham) is designed by Gavan Brown, Matt Tolman, and Martin Wallace, published by Roxley Games. Please support the original by purchasing the physical game.
-
-## Screenshots
-
-<p align="center">
-  <img src="screenshots/preview.gif" alt="Animated preview of setup, labeled hand cards, Canal and Rail Era boards, build choices, and scoring" width="100%">
-  <br><em>A quick look at setup, the labeled card hand, both eras, building, and scoring.</em>
-</p>
+> **Brass: Birmingham** is designed by Gavan Brown, Matt Tolman and Martin
+> Wallace, and published by [Roxley Games](https://roxley.com/products/brass-birmingham).
+> This is a fan project, not affiliated with or endorsed by them. Please
+> support the original by buying the physical game.
 
 <p align="center">
-  <img src="screenshots/canal_era.jpg" alt="Full Canal Era game board with placed industry tiles, canal links, cards, markets, and player panels" width="100%">
-  <br><em>Canal Era in play with the bundled board, cards, tile art, and resource cubes.</em>
+  <img src="screenshots/preview.gif" alt="Animated preview of setup, the card hand, the Canal and Rail Era boards, building, and scoring" width="100%">
 </p>
 
-<p align="center">
-  <img src="screenshots/rail_era.jpg" alt="Full Rail Era game board with rail links and higher-level industries" width="100%">
-  <br><em>Rail Era, with a wider network and higher-level industries.</em>
-</p>
-
-<p align="center">
-  <img src="assets/board.jpg" alt="Full Brass: Birmingham board artwork" width="58%">
-  <br><em>The printed board artwork used by the game.</em>
-</p>
-
----
-
-## The Game
-
-Compete as rival entrepreneurs in Birmingham and its surrounding towns. Establish canals and railways, develop industries, and outmaneuver your opponents across two distinct eras.
-
-**2-4 Players** · **Canal Era + Rail Era** · **Hotseat Multiplayer**
-
-### Two Eras of Industry
-
-**Canal Era (1770-1830)** — Build canals and establish your first industries. Only one tile per location. At the end, all canals and Level I tiles are removed — but Level II+ tiles carry over and score again.
-
-**Rail Era (1830-1870)** — Build railways (requiring coal), expand aggressively with multiple tiles per location, and push for the highest score.
-
----
-
-### Build Your Empire
-
-Choose from six industry types, each with a unique strategic role:
-
-| Industry | Role | Key Trait |
-|----------|------|-----------|
-| **Cotton Mills** | Sell goods for VP | Expensive but high-scoring |
-| **Coal Mines** | Fuel rail links and industries | Cheap, strong income |
-| **Iron Works** | Supply iron for building and development | Efficient, denies opponents |
-| **Manufacturers** | 8 unique levels with varied rewards | Versatile and complex |
-| **Potteries** | Massive VP potential (up to 20 VP) | High cost, requires planning |
-| **Breweries** | Supply beer for selling goods | The most important industry |
-
-Select what to build, where, and for how much — all costs including coal and iron sourcing are calculated automatically.
-
-![Build modal — choose an industry, see the cost breakdown](screenshots/build_modal.jpg)
-
-<p align="center"><em>Build action — choose from available industries at locations matching your cards</em></p>
-
-![Sell modal — choose a built industry and merchant beer](screenshots/sell_modal.jpg)
-
-<p align="center"><em>Sell action — check the goods, beer requirement, and merchant bonus before selling.</em></p>
-
----
-
-### Clear Action Workflow
-
-A persistent **action phase bar** guides you through each turn:
-
-1. **Choose Action** — Pick from Build, Network, Develop, Sell, Loan, Scout, or Pass
-2. **Select Target** — Choose what/where to build, which connection, etc.
-3. **Discard Card** — Valid cards glow gold; invalid cards are dimmed
-
-The phase bar shows your current step, contextual instructions, and a cancel button. Press **Escape** at any time to abort.
-
-When waiting for card selection, action buttons and your player mat dim to focus attention on your hand. Only valid discard options are clickable.
-
----
-
-### Game Log & Turn Transitions
-
-A **scrollable game log** in the right panel records every action: builds, network links, sales, loans, and more — color-coded by player. No more relying on fleeting toast notifications.
-
-Between turns, a **brief animated overlay** shows the next player's name in their color, giving a clear visual break.
-
-![Players panel, markets, and game log](screenshots/player_markets.jpg)
-
-<p align="center"><em>Right panel — player stats, markets with current prices, and the game log</em></p>
-
----
-
-### Develop to Unlock Higher Tiers
-
-Spend iron to remove low-level tiles from your player mat and access the powerful high-level industries underneath. Optionally develop two tiles at once.
-
-![Develop modal — remove tiles from your mat to unlock stronger ones](screenshots/develop_modal.jpg)
-
-<p align="center"><em>Develop action — skip past weak tiles to access Level III+ industries</em></p>
-
----
-
-### Your Hand, Your Strategy
-
-Play location cards to build anywhere on the map, or industry cards to build within your network. Manage your hand carefully — every action costs a card.
-
-Cards use the included printed faces, with inline SVG artwork as a fallback.
-
-![Hand, actions, and industry mat](screenshots/hand_actions.jpg)
-
-<p align="center"><em>Bottom panel — your hand of cards, the seven available actions, and your remaining industry tiles</em></p>
-
----
-
-### The Board
-
-The game includes the printed board artwork and also has an original, procedural
-night-time relief map as a fallback:
-
-- **Procedural terrain** — a hill-shaded elevation raster generated in-page, with an industrial haze over the Black Country basin
-- **Region washes** tinting each county, and warm furnace light pooling over every town
-- **Towns on slate plinths** with region-coloured name ribbons, as printed on the board
-- **Engraved industry art** — a spinning mill, pithead winding gear, blast furnace, sawtooth workshop, bottle kiln and cask, rather than abstract glyphs
-- **Canals** as cut waterways and **railways** as ballast with sleeper ties; rivers stay desaturated so they never read as buildable links
-- **A numbered 0–99 score track** running the perimeter of a brass frame
-
-Slots permitting two industries show both icons split on the diagonal.
-
----
-
-### Bundled Board Artwork
-
-The repository includes the board, industry chips, card faces, and player mat
-under `assets/`. The README gallery above shows the board art in play and as a
-full map.
-
-To use a different board image, replace `assets/board.jpg` locally or point the
-browser at another image:
-
-```js
-localStorage.brassBoardAsset = 'https://example.com/board.jpg'
-```
-
-The matching chip, card and mat files are already included:
-
-```
-assets/board.jpg              the map
-assets/tiles/<kind>-<n>.jpg   industry chips, e.g. coal-1.jpg, iron-3-flipped.jpg
-assets/cards/<id>.jpg         card faces, keyed by city id or industry id
-assets/player-mat.jpg         the player mat
-```
-
-The printed map carries the towns, routes and merchant buildings, and the game
-draws the changing state on top: placed chips, resource cubes, beer barrels and
-highlights. The locally bundled assets are tracked with the project; browser
-overrides and calibration remain in local storage.
-
-All 27 locations move to measured positions for a retail board, and each
-location's industry spaces are placed using the arrangement the board actually
-prints — Coalbrookdale one space over two, Birmingham two over two, and so on,
-rather than a single row. To adjust the alignment, open the page with
-`?calibrate=1`:
-
-| Input | Effect |
-|-------|--------|
-| drag a town / merchant / brewery | move it onto its printed space |
-| `c` | dump the finished layout as JSON to the console |
-| `r` | reset to the measured defaults |
-
-Positions are stored normalised, so one calibration holds for any image at any
-resolution, and is saved automatically as you drag.
-
-> Board artwork is normally the publisher's copyright. Supplying an image is
-> your call — use art you have the right to use.
-
-### Era Scoring
-
-At the end of each era, score VP from your flipped industry tiles and the links connecting them. Higher-level tiles placed in the Canal Era score in *both* eras.
-
-![Rail Era scoring results](screenshots/scoring.jpg)
-
-<p align="center"><em>Era scoring — link VP and industry VP tallied for each player</em></p>
-
----
-
-## How to Play
-
-### Quick Start
+## Origins and credits
+
+**The original digital implementation is by
+[Nissan Pow (npow)](https://github.com/npow), in
+[npow/brass-birmingham](https://github.com/npow/brass-birmingham).** That
+project created the game you see here: the rules engine, the board, the
+interface, the heuristic AI opponents, and the artwork integration. Upstream
+contributors also include Reynold Chan (AI opponents and a graphics
+overhaul), Jed Christiansen (a turn-order fix) and Alan Tao (cost
+information). Upstream has its own
+[documentation site](https://mintlify.com/npow/brass-birmingham).
+
+**This repository is a fork** of upstream commit `2c1fe1f`. It keeps the
+upstream game and adds:
+
+- a rules audit against the official rulebook, and fixes for the defects it confirmed;
+- the player choices the rulebook grants (which coal, iron, beer and merchant, and which tiles to sell for an income shortfall);
+- an engine that runs the whole game itself, with seeded, reproducible randomness, cloning and save/restore support, and one legal-move API for the UI, the AI and tools;
+- an automated test suite, headless simulations, and continuous integration.
+
+Apart from those rules fixes and the choice dialogs, the gameplay,
+presentation and AI strategy are upstream's. The fork's work is recorded in
+the [history documents](docs/README.md#history).
+
+Board geography and card data were referenced from community implementations,
+and tile data was checked against the
+[Tabletop Simulator implementation](https://github.com/ikegami/tts_brass) by
+Kini / ikegami. The board, card, tile and player-mat artwork in `assets/` is
+the publisher's copyright.
+
+## Run it locally
+
+Any static file server works:
 
 ```
 python3 -m http.server 8080
 ```
 
-Open [http://localhost:8080](http://localhost:8080) in your browser. No build step or dependencies.
+Then open <http://localhost:8080>, choose 2–4 players, mark any AI seats, and
+click **Begin Game**.
 
-1. Choose 2-4 players and enter names
-2. Click **Begin Game**
+## Run the tests
 
-![Game setup screen](screenshots/title.jpg)
-
-![The Canal Era board ready for the first turn](screenshots/board_start.jpg)
-
-### On Your Turn
-
-1. **Select an action** from the action panel (Build, Network, Develop, Sell, Loan, Scout, or Pass)
-2. **Follow the phase bar** — it shows your current step and what to do next
-3. **Choose your target** from the modal or board
-4. **Make any choices** the rules leave to you (which coal, iron, beer or merchant), if there is more than one option
-5. **Click a valid card** (highlighted with a gold pulse) to discard
-
-If you can't pay your income at the end of a round, you choose which of your industry tiles to sell.
-
-Disabled action buttons show **tooltips explaining why** they can't be used (e.g. "No iron available", "Need at least 3 cards").
-
-The game handles market pricing, turn order and scoring automatically, and sources coal, iron and beer for you whenever the rules leave no choice.
-
-### Running the Tests
-
-The rules engine has an automated test suite that runs in Node.js (v18+) with
-no browser and no dependencies — it uses Node's built-in test runner:
+You need Node.js 22 or later. Nothing to install:
 
 ```
-node --test test/*.test.js
+node --test test/*.test.js             # the test suite, about 30 s
+node scripts/simulate.js --games 10    # headless AI and random-move games
+node scripts/check-repo.js             # index.html references and doc links
 ```
 
-`BRASS_SIM_GAMES=100 node --test test/*.test.js` raises the number of full
-AI-vs-AI games the suite plays per player count (default 10). For the large
-headless regression run, with per-player-count statistics:
+CI runs the same commands on every pull request; see
+[`docs/testing.md`](docs/testing.md).
 
-```
-node scripts/simulate.js --games 100
-```
+## What it does
 
-Every simulated game runs through a strict driver: any failed AI action,
-engine exception, broken state invariant or wrong round count fails the run.
-Each game is also cloned and saved to JSON part-way through, and the original,
-the clone and the restored save must finish identically. Games are also
-compared with games recorded from the Assignment 1 code
-(`test/fixtures/assignment1-baseline.json`). The game itself still opens
-directly from `index.html`; the tests load the same script files into a Node
-`vm` context, where `Math.random` is disabled so that every random draw must
-come from the game's seeded generator.
+- Both eras (Canal and Rail) for 2–4 players, with all seven actions: Build, Network, Develop, Sell, Loan, Scout and Pass.
+- Automatic markets, income, turn order, era transitions and scoring.
+- Choices wherever the rules give one, and legal sourcing otherwise.
+- AI opponents at Easy, Normal and Hard.
+- A guided turn workflow, explanations for disabled actions, a game log, and the bundled board art, with a procedural fallback board.
 
-### Deterministic State, Cloning and Saves (engine API)
+See [`docs/gameplay.md`](docs/gameplay.md) for how to play and the rules as
+implemented.
 
-```js
-const state = new GameState(3, names, aiConfig, { seed: 42 }); // same seed + same actions = same game
-const copy  = state.clone();                         // fully independent copy, same RNG position
-const json  = JSON.stringify(state.serialize());     // complete, versioned save (includes hidden info)
-const again = GameState.deserialize(json);           // validated restore; throws GameStateError
-const view  = state.getPlayerView(playerId);         // what one player may see
-```
+<p align="center">
+  <img src="screenshots/canal_era.jpg" alt="The Canal Era board with industry tiles, canal links, cards, markets and player panels" width="100%">
+</p>
 
-See [`docs/state-model.md`](docs/state-model.md) for the state model, the
-save format and the hidden-information rules. There is no save/load UI yet.
+<p align="center">
+  <img src="screenshots/rail_era.jpg" alt="The Rail Era board with rail links and higher-level industries" width="100%">
+</p>
 
-### Moves and Player Choices (engine API)
+## Known limitations
 
-Every decision is a plain JSON move. One engine validates and executes moves
-for the UI, the AI and the tests:
+- Hotseat only, and hands are not hidden between human players.
+- No save, load or undo in the interface, although the engine supports them.
+- The Hard AI looks at opponents' hands.
+- No software licence (see below).
 
-```js
-logic.getLegalMoves(playerId)                            // every legal move
-logic.getLegalMoves(playerId, { expandChoices: true })   // …with every resource/merchant choice
-logic.applyMove(playerId, { type: 'build', card: 0, location: 'dudley', slot: 1,
-                            industry: 'ironWorks', coal: ['mine:kidderminster_0'] })
-logic.getNextChoice(playerId, move)                      // the next decision for a human
-```
+The full list is in [`docs/known-limitations.md`](docs/known-limitations.md).
 
-Illegal moves are rejected with no change to the game. Players choose
-everything the rulebook lets them choose:
-- coal from equally close mines;
-- which iron works;
-- which beer;
-- which merchant, and with it the bonus;
-- Gloucester's free develop;
-- which tiles to sell when income can't be paid.
+## Documentation
 
-See [`docs/moves.md`](docs/moves.md).
+[`docs/`](docs/README.md) covers the architecture, the engine APIs, testing and
+simulation, the board artwork, and the history of this fork.
 
-### Engine-Run Games (engine API)
+## Licence
 
-The engine runs the whole game: turns, rounds, income, shortfall decisions,
-era scoring and transitions, and final scoring with the ranking. The UI and
-the AI only choose moves:
-
-```js
-logic.getCurrentDecision()     // { type: 'action' | 'shortfall' | 'gameOver', playerId, ... }
-logic.play(playerId, move)     // validates, applies, advances; returns what happened as events
-logic.runGame(chooseMove)      // a complete headless game, start to final scoring
-```
-
-See [`docs/engine.md`](docs/engine.md).
-
-### Tips for New Players
-
-- **Build breweries early** — Beer is the most contested resource in the game
-- **Watch the turn order** — Spending less money means going first next round
-- **Develop to skip weak tiles** — Accessing Level III+ tiles is worth the iron cost
-- **Build in the Canal Era for double scoring** — Level II+ tiles persist into the Rail Era
-- **Don't ignore income** — It compounds every round and scores VP at the end
-
----
-
-## Rules Reference
-
-This implementation follows the official Brass: Birmingham rulebook:
-
-- **Coal** requires a connected source (mine or market via merchant link)
-- **Iron** can be taken from any iron works on the board — no connection needed
-- **Coal for a rail link** comes from the mine closest to either end of the new link; equally close mines are the player's choice
-- **Beer** for selling comes from your own breweries (anywhere), connected opponent breweries, or the one barrel beside the merchant tile you sell to
-- **A sale is all-or-nothing** — if the selected tiles can't all be sold with the available beer, nothing is spent
-- **Overbuilding** your own tiles requires same type + higher level; opponent coal/iron tiles can only be overbuilt when that resource is globally depleted
-- **Player choices** — when the rules allow a choice (equally close coal mines, any iron works, any eligible beer, which merchant tile, Gloucester's free develop, which tiles to sell for an income shortfall), you are asked; otherwise everything is sourced automatically
-- **Pottery I and III** have the lightbulb icon and cannot be developed — they must be built
-- **Turn order** each round goes to whoever spent the least money
-
----
-
-## Architecture
-
-Pure HTML/CSS/JS — no build tools, no frameworks, no dependencies. Board and
-component artwork is bundled under `assets/`; procedural board art remains the
-fallback.
-
-| File | Purpose |
-|------|---------|
-| `index.html` | Layout: setup screen, game screen with phase bar, game log, overlays |
-| `css/style.css` | Dark Victorian theme with CSS animations, card-select mode, transitions |
-| `js/gameData.js` | All constants: tiles, cities, connections, cards, merchants, markets |
-| `js/random.js` | `SeededRandom`: the seeded, serializable generator behind every shuffle |
-| `js/moves.js` | Move engine: move format, planners and choice points, `getLegalMoves` / `applyMove` / `getNextChoice` |
-| `js/progression.js` | Game progression: `getCurrentDecision` / `play` / `runGame` — turns, rounds, income, shortfalls, eras, final scoring |
-| `js/gameState.js` | Game state, market mechanics, network pathfinding, turn management, clone / serialize / restore |
-| `js/gameLogic.js` | Rules queries (targets, costs, sources), legacy `execute*` wrappers, `getDisabledReason()` |
-| `js/industryIcons.js` | Engraved industry illustrations shared by the board and hand cards |
-| `js/boardAssets.js` | Bundled board/component artwork + measured board layout |
-| `js/boardRenderer.js` | SVG board: procedural terrain, frame + score track, calibration mode |
-| `js/uiManager.js` | Presents the game and collects decisions (phase bar, cards, choice dialogs, log, scoring screens); the engine drives progression |
-| `js/main.js` | Entry point, setup screen |
-| `js/aiPlayer.js` | Heuristic AI opponent (Easy / Normal / Hard) |
-| `test/*.test.js` | `node:test` suite: setup, all 7 actions, resources, turns/eras, scoring, regressions, determinism, cloning, serialization, legal moves, player choices, UI choice flow, game progression, AI and random games |
-| `test/helpers/` | Engine loader (`vm`), scenario builders, strict headless driver, state invariants, game fingerprints, DOM stub |
-| `test/fixtures/` | Games recorded from the Assignment 1 code, for behaviour comparison |
-| `scripts/simulate.js` | Headless AI-vs-AI regression run |
-| `docs/` | Rules audit, engine architecture, state model / save format, moves and choices, assignment reports |
-
----
-
-## Credits
-
-- **Brass: Birmingham** designed by Gavan Brown, Matt Tolman, and Martin Wallace
-- Published by [Roxley Games](https://roxley.com)
-- Tile data verified against the [Tabletop Simulator](https://github.com/ikegami/tts_brass) implementation by Kini/ikegami, and against the retail player mat and tile art bundled in `assets/` (see `docs/brass-review-findings.md`, C7)
-- Board geography and card data referenced from community implementations
-
----
-
-*Fan-made digital adaptation for personal and educational use. All game design credit belongs to the original designers and publisher.*
+Neither this fork nor the upstream repository includes a software licence. The
+code remains the copyright of its authors, and the artwork that of its
+owners. Ask the upstream author before reusing or redistributing the code.

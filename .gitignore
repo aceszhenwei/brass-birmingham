@@ -1,7 +1,21 @@
+# Dependencies and package files (the project has none; see docs/testing.md)
 node_modules/
 package-lock.json
 package.json
-.DS_Store
-*.log
+
+# Local tooling and notes from upstream development
 screenshots/capture.js
 progress.md
+
+# Test and simulation output
+coverage/
+simulation.log
+*.log
+
+# Editors and operating systems
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db

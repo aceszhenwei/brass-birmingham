@@ -9,7 +9,7 @@ rendering, styling or artwork changes.
 
 `index.html` still opens directly from disk, with no build step and no
 dependencies. The move format and choice rules are documented in
-[`moves.md`](moves.md).
+[`moves.md`](../moves.md).
 
 ## 1. Architectural changes and design decisions
 

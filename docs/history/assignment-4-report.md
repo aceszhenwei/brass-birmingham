@@ -8,7 +8,7 @@ as consumers.
 features.
 
 `index.html` still opens directly from disk, with no build step and no
-dependencies. The architecture is documented in [`engine.md`](engine.md).
+dependencies. The architecture is documented in [`engine.md`](../engine.md).
 
 ## 1. Architectural changes
 
