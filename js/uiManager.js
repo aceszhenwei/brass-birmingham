@@ -161,6 +161,21 @@ class UIManager {
 
         const cardArt = typeof BoardAssets !== 'undefined' && BoardAssets.cardsReady();
 
+        // An AI opponent's hand is private: show card backs only
+        if (player.isAI) {
+            const backUrl = cardArt ? BoardAssets.cardBackUrl() : null;
+            player.hand.forEach(() => {
+                const cardEl = document.createElement('div');
+                cardEl.className = backUrl ? 'card card-art card-back' : 'card card-back';
+                cardEl.innerHTML = backUrl
+                    ? `<img src="${backUrl}" alt="Hidden card" draggable="false">`
+                    : '<div class="card-type">Hidden</div><div class="card-icon">&#10070;</div>';
+                container.appendChild(cardEl);
+            });
+            document.getElementById('bottom-panel').classList.remove('card-select-mode');
+            return;
+        }
+
         player.hand.forEach((card, idx) => {
             const cardEl = document.createElement('div');
             cardEl.className = 'card';
@@ -781,7 +796,7 @@ class UIManager {
                         <div class="choice-item-name">${name(s.cities[0])} — ${name(s.cities[1])}</div>
                         <div class="choice-item-detail">2nd link · +1 beer</div>
                     </div>
-                    <div class="choice-item-cost">£15 total${s.coalCost > 0 ? ` + £${s.coalCost} coal` : ''}</div>
+                    <div class="choice-item-cost">£${s.totalCost} total${s.totalCost > RAIL_DOUBLE_LINK_COST ? ' (incl. coal)' : ''}</div>
                 </div>
             `;
         }
@@ -843,19 +858,11 @@ class UIManager {
     }
 
     showDevelopSecondChoice(playerId, firstType) {
-        const types = this.logic.getDevelopableTypes(playerId);
-        const remainingTypes = types.filter(t => {
-            if (t.type === firstType) {
-                const remaining = this.state.getRemainingTiles(playerId);
-                return remaining[t.type].count > 1;
-            }
-            return true;
-        });
+        // Only second tiles that are developable once the first is removed
+        // (no lightbulb tiles) and affordable with a second iron
+        const remainingTypes = this.logic.getSecondDevelopOptions(playerId, firstType);
 
-        const ironSources = this.state.findIronSource(playerId);
-        const canAffordTwo = ironSources.length >= 2;
-
-        if (!canAffordTwo || remainingTypes.length === 0) {
+        if (remainingTypes.length === 0) {
             this.closeModal();
             this.actionStep = 1;
             this.updatePhaseBar();
@@ -953,10 +960,18 @@ class UIManager {
                 this.showToast('Select at least one industry to sell', 'warning');
                 return;
             }
-            this.pendingData.sellPlan = [...selectedKeys].map(key => {
+            const sellPlan = [...selectedKeys].map(key => {
                 const cb = document.querySelector(`.merchant-beer-cb[data-key="${key}"]`);
                 return { key, useMerchantBeer: cb ? cb.checked : false };
             });
+            // Tiles in one sale share the available beer — reject a
+            // combination that can't all be sold before a card is spent
+            const plan = this.logic.planSell(playerId, sellPlan);
+            if (!plan.ok) {
+                this.showToast(plan.message, 'warning');
+                return;
+            }
+            this.pendingData.sellPlan = sellPlan;
             this.closeModal();
             this.actionStep = 1;
             this.updatePhaseBar();
@@ -1171,6 +1186,11 @@ class UIManager {
             this.showToast(result.message, 'success');
         } else {
             this.showToast(result.message, 'error');
+            if (this.state.currentPlayer.isAI && !this.state.gameOver) {
+                // A failed AI action must never stall the game
+                this.recoverAITurn(result.message);
+                return;
+            }
             this.cancelAction();
             return;
         }
@@ -1243,12 +1263,38 @@ class UIManager {
         const player = this.state.players[playerId];
         if (!player.isAI) return; // safety guard against stale timers
 
-        const decision = AIPlayer.chooseAction(this.state, this.logic, playerId, player.aiDifficulty);
+        let decision;
+        try {
+            decision = AIPlayer.chooseAction(this.state, this.logic, playerId, player.aiDifficulty);
+        } catch (err) {
+            this.recoverAITurn(err && err.message ? err.message : String(err));
+            return;
+        }
 
         this.selectedAction = decision.action;
         this.pendingData = decision.pendingData;
         this.selectedCard = decision.cardIndex;
         this.processActionStep();
+    }
+
+    // Safety net for the interactive game: if an AI action fails (or the AI
+    // throws), log it and Pass with the AI's first card so play continues.
+    // Headless tests do NOT use this — they fail loudly on any AI error.
+    recoverAITurn(reason) {
+        const playerId = this.state.currentPlayerId;
+        console.error(`AI action failed for player ${playerId}: ${reason}`);
+        this.addLogEntry(playerId, `AI action failed (${reason}) — passing instead`);
+        this.selectedAction = null;
+        this.actionStep = 0;
+        this.pendingData = {};
+        this.selectedCard = null;
+        this.closeModal();
+
+        const hasCard = this.state.players[playerId].hand.length > 0;
+        const passResult = hasCard
+            ? this.logic.executePass(playerId, 0)
+            : { success: true, message: 'Skipped (no cards)' };
+        this.completeAction(passResult);
     }
 
     setAIOverlay(active) {

@@ -1037,6 +1037,12 @@ h1, h2, h3 {
     pointer-events: none;
 }
 
+/* AI opponents' hands are shown face down */
+.card.card-back {
+    cursor: default;
+    pointer-events: none;
+}
+
 .card.scout-queued {
     border-color: #e74c3c;
     box-shadow: 0 0 10px rgba(231,76,60,0.5);

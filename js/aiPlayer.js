@@ -241,15 +241,11 @@ const AIPlayer = (() => {
         })).sort((a, b) => (b.urgency + b.unlockValue) - (a.urgency + a.unlockValue));
 
         const first = scored[0];
-        const remaining = state.getRemainingTiles(playerId);
-        const canDoSecondSameType = remaining[first.t.type].count > 1;
-        const twoSourceCost = ironSources.slice(0, 2).reduce((sum, s) => sum + (s.free ? 0 : s.price), 0);
-        const canAffordSecond = ironSources.length >= 2 && twoSourceCost <= player.money;
 
-        let second = null;
-        if (canAffordSecond) {
-            second = scored.slice(1).find(s => s.t.type !== first.t.type || canDoSecondSameType);
-        }
+        // Second tile: must be legal (developable once the first is removed)
+        // and affordable — the same check the engine enforces
+        const second = scored.slice(1).find(s =>
+            logic.canDevelopTypes(playerId, first.t.type, s.t.type).ok) || null;
 
         const ironCost = ironSources.slice(0, second ? 2 : 1).reduce((sum, s) => sum + (s.free ? 0 : s.price), 0);
 
@@ -305,11 +301,22 @@ const AIPlayer = (() => {
         }).sort((a, b) => (b.bonus - a.bonus) || (b.tileValue - a.tileValue));
 
         // Drink merchant beer whenever it's on offer: the bonus is free and
-        // it spares brewery barrels for other sales.
-        const sellPlan = ranked.map(r => ({ key: r.t.key, useMerchantBeer: r.t.merchantBeerAvailable }));
-        const totalVP = ranked.reduce((s, r) => s + r.t.tile.tileData.vp, 0);
-        const totalIncome = ranked.reduce((s, r) => s + r.t.tile.tileData.income, 0);
-        const totalBonus = ranked.reduce((s, r) => s + r.bonus, 0);
+        // it spares brewery barrels for other sales. Tiles share the available
+        // beer, so add them in rank order only while the whole plan stays
+        // sellable (validated by the engine's planSell).
+        const sellPlan = [];
+        const included = [];
+        for (const r of ranked) {
+            const entry = { key: r.t.key, useMerchantBeer: r.t.merchantBeerAvailable };
+            if (logic.planSell(playerId, [...sellPlan, entry]).ok) {
+                sellPlan.push(entry);
+                included.push(r);
+            }
+        }
+        if (sellPlan.length === 0) return null;
+        const totalVP = included.reduce((s, r) => s + r.t.tile.tileData.vp, 0);
+        const totalIncome = included.reduce((s, r) => s + r.t.tile.tileData.income, 0);
+        const totalBonus = included.reduce((s, r) => s + r.bonus, 0);
 
         const player = state.players[playerId];
         const cardIndex = pickCardIndex(logic, playerId, ACTIONS.SELL, null, player);
