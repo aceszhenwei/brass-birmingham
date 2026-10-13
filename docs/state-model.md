@@ -126,8 +126,9 @@ then rebuilds a working state. Anything malformed or incompatible throws a
 `serialize()` contains everything needed to continue the game exactly. That
 includes hidden information: every hand, the order of the draw deck,
 face-down discards and the random-generator state, which predicts future
-shuffles. It is an engine and AI facility. It is not shown to players and is
-not wired to any UI.
+shuffles. It is an engine and AI facility. The UI uses clones internally for
+active-turn undo and scoring inspection, but does not show these hidden fields
+or offer serialization import/export controls to players.
 
 There are two player-facing views:
 - **`state.toJSON()`.** Used by `window.render_game_to_text` and by `JSON.stringify(state)`. Unchanged: a summary with hand and deck sizes only.

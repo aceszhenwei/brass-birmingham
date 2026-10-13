@@ -7,12 +7,12 @@ record the limitations as they stood at each stage.
 
 - **Hotseat only.** All players share one screen. There is no online multiplayer.
 - **Hands are not hidden between human players.** When the turn changes, the next player can see the previous player's hand.
-- **No save, load or undo in the interface.** The engine supports them through `serialize` / `deserialize` and `clone` ([`state-model.md`](state-model.md)), but no UI uses them yet.
-- **No automated browser tests.** CI tests the engine headlessly; the interface is checked by hand.
+- **No save/load controls.** The engine supports serialization and restoration ([`state-model.md`](state-model.md)). **Undo action** and **Reset turn** restore the active human turn using clones; they cannot cross a turn, round or era boundary, undo another player, or reverse a completed turn. The first round has one action per turn, so an executed action immediately ends that turn and cannot be undone.
+- **No browser tests in CI.** CI exercises the engine and UI against headless DOM/SVG stubs. The optional [screenshot capture](testing.md#documentation-screenshots) runs the actual browser interface, but is not a full interaction or responsive-layout test suite.
 
 ## AI
 
-- **The AI is heuristic** (Easy / Normal / Hard), inherited from upstream and unchanged by this fork apart from bug fixes.
+- **The AI is heuristic** (Easy / Normal / Hard). It builds on upstream, with fair-information decisions and measured valuation changes described below.
 - **Fair information (since Assignment 6).** Every difficulty decides on the player's observation, so no AI sees opponents' hands, the deck order or the game RNG ([AI corrections](research/ai-corrections-a6.md)). The research baseline `AIPlayer.LEGACY_A5` keeps the old Hard leak on purpose and is not a fair benchmark.
 - **The AI is still weak, and its levels are close together.** The [AI audit](research/ai-baseline-audit.md) and the [Assignment 6 report](research/ai-corrections-a6.md) give the measurements. Overbuild scoring was fixed in Assignment 8 ([overbuild research](research/ai-overbuild-a8.md); +3.6 to +4.0 VP per game). Building sellable industries where they could not be sold was fixed in Assignment 9 ([investment research](research/ai-invest-a9.md); +9.3 to +10.5 VP per game). Assignment 10 added double rail links and stopped development in the last two rounds ([audit closure](research/ai-audit-a10.md); +5.2 to +8.1 VP). The [audit checklist](research/ai-audit-checklist.md) gives the status of every original finding. Normal and Hard are still level (+0.7 ± 2.3 VP): separating the levels needs a decision on what each should be.
 - **Development is valued without asking whether the industry will be built.** Since Assignment 10 the AI no longer develops in the game's last two rounds, but about a third of developed industries are still never built (two thirds before).
@@ -44,6 +44,6 @@ rules question was settled.
 
 ## Future work
 
-- An AI that uses the engine's decision, legal-move and clone APIs, and respects hidden information.
-- A save/load and undo interface built on the existing engine support.
+- Evaluate integrating the experimental multi-action planner and separating the difficulty levels; the current AI already uses engine decisions and respects hidden information.
+- Save/load controls built on the existing engine support; broader undo would need explicit turn-finalisation and information-reveal rules.
 - Hiding hands between human players in hotseat games.

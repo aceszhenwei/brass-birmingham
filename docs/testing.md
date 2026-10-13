@@ -27,6 +27,8 @@ so any gameplay code that bypasses the game's seeded generator fails the suite.
 | `regressions.test.js` | The defects confirmed in the [rules audit](history/brass-review-findings.md) |
 | `determinism.test.js`, `clone.test.js`, `serialization.test.js` | Seeded randomness, cloning, saves. Includes the bit-for-bit replay of the Assignment 1 games by the legacy AI baseline (`AIPlayer.LEGACY_A5`) |
 | `legal-moves.test.js`, `choices.test.js` | Legal-move soundness and completeness, player choices, fuzzed moves |
+| `board-merchants.test.js`, `board-status.test.js` | Merchant demand/beer, live market cubes, spending and turn-order SVG overlays |
+| `playability-ui.test.js`, `direct-actions.test.js`, `turn-review-ui.test.js` | Route placement, ownership colours, expanded inventory, card/map-first actions, confirmation, resource badges, turn snapshots and scoring review |
 | `ui-choices.test.js` | The UI's choice dialogs and engine-driven flow, with a DOM stub |
 | `progression.test.js` | Engine-controlled progression, saves at every lifecycle boundary |
 | `ai-simulation.test.js` | Complete AI-vs-AI and random legal-move games |
@@ -130,3 +132,46 @@ There is no automated browser test in CI. After UI changes, open `index.html`
 through a local server and play a few turns, including a choice dialog and an
 AI turn. The assignment reports describe the Playwright checks used during
 development.
+
+## Documentation screenshots
+
+`scripts/capture-screenshots.js` captures the actual browser UI at 1600 × 1100.
+It starts with seed 91, advances through legal production moves, and captures
+setup, card highlights, both eras, Build review, Network targets, Develop and
+Sell dialogs, the industry sheet, undo controls, and scoring. It fails on
+browser script errors or missing expected actions. The game still has no
+runtime dependencies; Playwright is only needed for this optional tool.
+
+Start a server in one terminal:
+
+```
+python3 -m http.server 8080
+```
+
+With Playwright and its Chromium installed in your development environment:
+
+```
+BRASS_PREVIEW_FRAMES=/tmp/brass-preview-frames node scripts/capture-screenshots.js
+```
+
+Set `CHROME_PATH` to use an existing Chromium executable,
+`BRASS_CAPTURE_URL` for another local server URL, or `NODE_PATH` if Playwright
+is installed outside the project. Frames default to `brass-preview-frames/` inside the system temporary
+directory. The tool clears its numbered PNG frames at the start of a run.
+
+Create the animated preview from the captured frames with Python and Pillow:
+
+```python
+from pathlib import Path
+from PIL import Image
+frames = [Image.open(p).convert('RGB').resize((1000, 688))
+          for p in sorted(Path('/tmp/brass-preview-frames').glob('*.png'))]
+frames[0].save('screenshots/preview.gif', save_all=True,
+               append_images=frames[1:], duration=2200, loop=0, optimize=True)
+```
+
+Inspect the images and the animation before committing. Captures are examples
+from one seeded game; player colours, merchants and available targets vary.
+Update `docs/gameplay.md` captions with the images. Historical reports and
+research results describe earlier stages and should retain their original
+claims rather than being rewritten to match the current UI.

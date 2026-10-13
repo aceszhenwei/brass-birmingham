@@ -38,11 +38,12 @@ choose moves and present what happened; neither advances the game. See
 | `js/actionIcons.js` | Action button icons |
 | `js/boardAssets.js` | The bundled board and component artwork, and the measured board layout ([`board-artwork.md`](board-artwork.md)) |
 | `js/boardRenderer.js` | The SVG board: procedural terrain, frame and score track, and calibration mode |
-| `js/uiManager.js` | Presents the game and collects decisions: the phase bar, cards, choice dialogs, the log, and scoring screens |
+| `js/uiManager.js` | Presents the game and collects decisions: card/map-first actions, confirmation, choice dialogs, compact summaries, industry inventory, active-turn snapshots, the log and scoring reviews |
 | `js/main.js` | Entry point and setup screen |
 | `assets/` | Board, tile, card, and player-mat artwork |
 | `screenshots/` | Images used by the README and the docs |
 | `test/` | The `node:test` suite, its helpers, and fixtures ([`testing.md`](testing.md)) |
+| `scripts/capture-screenshots.js` | Optional browser capture of the current UI for documentation; requires Playwright only when run |
 | `scripts/simulate.js` | The headless simulation run ([`testing.md`](testing.md)) |
 | `scripts/research/` | AI research experiments ([`research/ai-baseline-audit.md`](research/ai-baseline-audit.md)), including the experimental planner `planner.js` ([`research/ai-planning-a11.md`](research/ai-planning-a11.md)), which the game does not load |
 | `.github/workflows/` | Continuous integration ([`testing.md`](testing.md)) |

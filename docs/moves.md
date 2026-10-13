@@ -138,9 +138,9 @@ of the game allowed skipping.
 
 ## The UI flow
 
-1. The player picks an action and a target (build space, link, tiles to sell, tiles to develop), exactly as before.
-2. `UIManager.proceedWithMove(move)` asks `getNextChoice` for each remaining decision and shows it as a choice dialog (Choose Coal / Iron / Beer / Merchant, Free Develop).
-3. It then moves to the card step. Positions where the rules allow only one option never show a dialog.
-4. The card click completes the move, and `playMove` calls `logic.play`.
+1. Build and Network can start from a card, map target or action button. Other actions start from their buttons. A selected card filters legal Build targets; Network targets are selected directly on the map, including an optional second Rail link.
+2. `UIManager.proceedWithMove(move)` asks `getNextChoice` for each remaining decision and shows a choice dialog (Choose Coal / Iron / Beer / Merchant, Free Develop). Positions with only one legal option do not prompt.
+3. A valid discard is chosen before or after the target. Build and Network show an explicit review with the target, total cost and card; only Confirm sends the move to `playMove` → `logic.play`. Other actions retain their card-completion flow.
+4. Cancel clears the unconfirmed selection without changing game state. Active-turn Undo/Reset restores completed human actions from snapshots, subject to the limits in [`gameplay.md`](gameplay.md#undo-and-reset).
 5. AI decisions go through the same `playMove` after `moveFromDecision`.
-6. After every move, `continueGame` asks the engine for the next decision: a shortfall prompt, an AI turn or a human turn. See [`engine.md`](engine.md).
+6. After every move, the UI presents engine events. Scoring reviews pause human play until Continue; otherwise `continueGame` asks the engine for the next shortfall, AI or human decision. See [`engine.md`](engine.md).

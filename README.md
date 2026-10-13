@@ -12,7 +12,7 @@ straight from `index.html`, with no build step and no dependencies.
 > support the original by buying the physical game.
 
 <p align="center">
-  <img src="screenshots/preview.gif" alt="Animated preview of setup, the card hand, the Canal and Rail Era boards, building, and scoring" width="100%">
+  <img src="screenshots/build_review.jpg" alt="Current Build review: chosen map target, total cost, discard card and explicit confirmation" width="100%">
 </p>
 
 ## Origins and credits
@@ -33,11 +33,13 @@ upstream game and adds:
 - a rules audit against the official rulebook, and fixes for the defects it confirmed;
 - the player choices the rulebook grants (which coal, iron, beer and merchant, and which tiles to sell for an income shortfall);
 - an engine that runs the whole game itself, with seeded, reproducible randomness, cloning and save/restore support, and one legal-move API for the UI, the AI and tools;
+- fair-information AI corrections and measured improvements to investment, overbuilding, rail links and late-game development;
+- card/map-first Build and Network, player-coloured components, live board markets and turn order, merchant demand/beer indicators, an expanded industry sheet, active-turn undo/reset and scoring reviews;
 - an automated test suite, headless simulations, and continuous integration.
 
-Apart from those rules fixes and the choice dialogs, the gameplay,
-presentation and AI strategy are upstream's. The fork's work is recorded in
-the [history documents](docs/README.md#history).
+The fork builds on upstream's implementation. Its rules and engine work is
+recorded in the [history documents](docs/README.md#history), and AI experiments
+and adopted changes are documented in [AI research](docs/README.md#research).
 
 Board geography and card data were referenced from community implementations,
 and tile data was checked against the
@@ -75,7 +77,11 @@ CI runs the same commands on every pull request; see
 - Automatic markets, income, turn order, era transitions and scoring.
 - Choices wherever the rules give one, and legal sourcing otherwise.
 - AI opponents at Easy, Normal and Hard.
-- A guided turn workflow, explanations for disabled actions, a game log, and the bundled board art, with a procedural fallback board.
+- Select cards or map targets to start Build and Network; review the target, cost and discard before confirming.
+- Live coal/iron markets, round spending and provisional next-round order on the board; visible merchant demand and beer availability.
+- Player-coloured links and industries, current resource counts, compact expandable sidebar details, and an expanded industry inventory.
+- Undo/reset during the current human turn, and per-player scoring breakdowns at both era ends.
+- A guided phase bar, explanations for disabled actions, a reserved game log, and bundled board art with a procedural fallback.
 
 See [`docs/gameplay.md`](docs/gameplay.md) for how to play and the rules as
 implemented.
@@ -85,14 +91,14 @@ implemented.
 </p>
 
 <p align="center">
-  <img src="screenshots/rail_era.jpg" alt="The Rail Era board with rail links and higher-level industries" width="100%">
+  <img src="screenshots/network.jpg" alt="Current Network action with legal routes highlighted directly on the board" width="100%">
 </p>
 
 ## Known limitations
 
 - Hotseat only, and hands are not hidden between human players.
-- No save, load or undo in the interface, although the engine supports them.
-- The Hard AI looks at opponents' hands.
+- No save/load controls; undo/reset is limited to the active human turn before it ends.
+- AI difficulties remain close in strength; the experimental multi-action planner is not enabled in the game.
 - No software licence (see below).
 
 The full list is in [`docs/known-limitations.md`](docs/known-limitations.md).

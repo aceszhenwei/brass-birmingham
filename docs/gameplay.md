@@ -41,16 +41,24 @@ to see their detailed lists, or a player to see cards and links remaining.
 Expanded player details stay open across refreshes. The log retains its own
 space. On coal and iron tiles, the live **N LEFT** badge replaces the printed
 capacity symbols, so it indicates current supply rather than the initial
-quantity. Flipped tiles retain their printed scoring information.
+quantity. Flipped tiles retain their printed scoring information. The board
+markets show occupied cubes and highlight the next purchase with its price.
+Merchant demand stays visible after its beer is used; **1 BEER**, **0 USED**
+and **0 NONE** distinguish available, consumed and blank merchant supplies.
+The two wildcard stacks are supply artwork, not extra cards in your hand.
 
 If you can't pay your income at the end of a round, you choose which of your
 industry tiles to sell. Disabled action buttons have tooltips explaining why
 they can't be used, for example "No iron available" or "Need at least 3
 cards". Market prices, turn order, and scoring are handled for you.
 
-![Build dialog with the cost breakdown](../screenshots/build_modal.jpg)
+![Build review showing the chosen target, total cost and discard card](../screenshots/build_review.jpg)
 
-*Build options are now shown for a clicked multi-industry slot; the map stays visible during ordinary target selection.*
+*Build: select a card or map slot, choose any resource sources, then review and confirm while the board stays visible. A multi-industry slot opens only its local choices.*
+
+![Network targets highlighted directly on the map](../screenshots/network.jpg)
+
+*Network: click a highlighted route. In Rail, choose a second highlighted route or **Keep one link**, then review and confirm.*
 
 ![Sell dialog with merchant beer](../screenshots/sell_modal.jpg)
 
@@ -64,6 +72,28 @@ cards". Market prices, turn order, and scoring are handled for you.
 
 *Your hand, the seven actions, and your remaining industry tiles. Cards show the bundled printed faces, with SVG artwork as a fallback.*
 
+## Industry inventory
+
+Click **Expand** beside **Your Industries** to inspect the full inventory.
+Choose any player to see public remaining counts, build costs, flip rewards,
+production/beer requirements, development restrictions and era availability.
+Costs here are base tile costs; the action review includes market purchases.
+Close the dialog or press Escape to return to the current action.
+
+![Expanded industry sheet with costs, rewards and era restrictions](../screenshots/industries.jpg)
+
+## Undo and reset
+
+**Undo action** restores the previous completed action in your active human
+turn. **Reset turn** restores the start of that turn. Cards, resources,
+spending, RNG state and log entries are restored together. To abandon an
+unconfirmed selection, use **Cancel** or Escape instead.
+
+The controls stop working when the turn ends, another player takes over, or
+the round/era changes. They cannot undo a completed turn. In the one-action
+first round, an executed action ends the turn immediately. They do not undo
+AI turns or income-shortfall decisions.
+
 ## Game log and turn transitions
 
 A scrollable game log in the right panel records every action, colour-coded by
@@ -74,9 +104,12 @@ player. Between turns, a short overlay shows the next player's name.
 ## Era scoring
 
 At the end of each era, you score VP for your flipped industry tiles and for
-the links connecting them.
-
-![Era scoring results](../screenshots/scoring.jpg)
+the links connecting them. The review shows each player's link VP, industry
+VP, total for this era and cumulative VP. Expand a player to inspect each
+link and industry contribution, including unflipped industries worth zero.
+Canal scoring appears before play resumes in Rail; Rail scoring appears
+before the final ranking. Click **Continue** to advance. All-AI spectator
+games automatically dismiss the review after a short pause.
 
 ## Rules as implemented
 
@@ -90,7 +123,7 @@ The engine follows the official rulebook. The points players most often ask abou
 - **Overbuilding.** You may overbuild your own tiles with the same type at a higher level. You may overbuild an opponent's coal or iron tile only when that resource is exhausted everywhere.
 - **Player choices.** You are asked whenever the rules allow a choice: equally close coal mines, any iron works, any eligible beer, which merchant tile, Gloucester's free develop, and which tiles to sell for an income shortfall. Otherwise sourcing is automatic.
 - **Pottery I and III** have the lightbulb icon and can't be developed; they must be built.
-- **Turn order** each round goes to whoever spent the least money.
+- **Turn order** each round goes to whoever spent the least money; spending ties preserve the current order. The on-board and sidebar previews are provisional until the round ends.
 
 Interpretations where the rulebook is not explicit are listed in
 [`known-limitations.md`](known-limitations.md).
