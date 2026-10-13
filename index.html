@@ -92,6 +92,7 @@
 
             <!-- Right Panel -->
             <div id="right-panel">
+                <div id="sidebar-info">
                 <section id="turn-order-panel" aria-label="Turn order and round spending">
                     <h3>Turn order</h3>
                     <div id="turn-order-summary" aria-live="polite"></div>
@@ -119,6 +120,7 @@
                 </div>
 
                 <!-- Game Log -->
+                </div>
                 <div id="game-log-panel">
                     <h3>Game Log</h3>
                     <div id="game-log"></div>
@@ -167,7 +169,7 @@
             </div>
             <!-- Player Mat (industry tiles remaining) -->
             <div id="player-mat-container">
-                <div class="mat-label">Your Industries</div>
+                <div class="mat-header"><div class="mat-label">Your Industries</div><button id="expand-industries" type="button">Expand</button></div>
                 <div id="player-mat"></div>
             </div>
         </div>
@@ -184,6 +186,15 @@
             <div id="modal-footer"></div>
         </div>
     </div>
+
+    <dialog id="industries-dialog" aria-labelledby="industries-title">
+        <div class="industries-header">
+            <h2 id="industries-title">Industry sheet</h2>
+            <label>Player <select id="industries-player"></select></label>
+            <button id="industries-close" type="button" aria-label="Close industry sheet">Close</button>
+        </div>
+        <div id="industries-body"></div>
+    </dialog>
 
     <!-- Toast Notifications -->
     <div id="toast-container"></div>

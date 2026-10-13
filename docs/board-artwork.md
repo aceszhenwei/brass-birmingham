@@ -40,6 +40,27 @@ Market and turn-track coordinates match the bundled retail board image;
 town calibration adjusts the adjacent merchant beer positions along with
 their demand tiles.
 
+Link tile centres and angles are measured on each printed route in
+`BoardAssets.LINK_PLACEMENTS`. Built tiles and Network selection targets use
+the same anchors, including one token for the Kidderminster–Worcester link
+that connects the southern brewery. Custom town calibration shifts these
+anchors with the average movement of their endpoints; substantially different
+board art requires remeasuring the route anchors.
+
+The bundled single-colour industry and link artwork is recoloured in Canvas
+for each player. The purple industry ground and yellow link ground receive
+the player's colour while neutral numbers and black flipped faces remain
+legible. These are generated variants of the bundled artwork, not a newly
+sourced official colour set. Variants are cached for the session. If Canvas
+cannot read the image, the original artwork and ownership border remain.
+
+The Game Log has reserved space below a separately scrolling information
+panel. **Expand** beside **Your Industries** opens a native dialog with
+remaining counts by level, base build costs, flip rewards, production/sale
+beer requirements, development restrictions and era availability. It can
+inspect any player's public inventory, updates as play proceeds and does
+not change the current action or reveal hands. Close or Escape returns to play.
+
 > This artwork is the publisher's copyright and is included as inherited from
 > the upstream project. If you supply your own image, use art you have the
 > right to use.

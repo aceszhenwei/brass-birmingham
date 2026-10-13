@@ -2290,3 +2290,32 @@ h1, h2, h3 {
 .market-space .cube-svg { width: 18px; height: 18px; align-self: flex-start; margin-top: 2px; }
 .market-price-label { position: absolute; bottom: 1px; font-size: 8px; color: #f5ecdb; }
 .market-space.next-purchase { outline: 2px solid #fff2ae; outline-offset: 1px; }
+
+/* Keep the log in its own reserved area; only the information above scrolls. */
+#right-panel { min-height: 0; overflow: hidden; }
+#sidebar-info { flex: 1 1 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+#sidebar-info > * { flex-shrink: 0; }
+#game-log-panel { flex: 0 0 clamp(110px, 22vh, 190px); min-height: 110px; overflow: hidden; }
+#game-log { min-height: 0; max-height: none; }
+.mat-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+.mat-header .mat-label { margin: 0; }
+#expand-industries, #industries-close { padding: 5px 10px; color: #fff2ae; background: var(--bg-dark); border: 1px solid var(--accent-gold); border-radius: 4px; cursor: pointer; }
+#industries-dialog { width: min(1100px, 94vw); max-height: 90dvh; padding: 0; margin: auto; color: var(--text-primary); background: var(--bg-medium); border: 2px solid var(--accent-gold); border-radius: 10px; }
+#industries-dialog::backdrop { background: rgba(0,0,0,0.75); }
+.industries-header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 15px; flex-wrap: wrap; padding: 15px; background: var(--bg-medium); border-bottom: 1px solid var(--accent-gold); }
+.industries-header h2 { flex: 1; font-size: 18px; }
+#industries-player { color: var(--text-primary); background: var(--bg-dark); padding: 5px; }
+#industries-body { padding: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.industries-note { grid-column: 1 / -1; font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
+.industry-detail h3 { font-size: 15px; margin-bottom: 8px; }
+.industry-detail-card { display: flex; gap: 10px; padding: 10px; margin-bottom: 8px; background: var(--bg-dark); border: 1px solid var(--border-dark); border-radius: 5px; }
+.industry-detail-card img, .industry-detail-card > div:first-child { width: 70px; height: 70px; flex: 0 0 70px; object-fit: contain; }
+.industry-detail-card p { font-size: 12px; line-height: 1.5; margin: 0 0 3px; }
+.industry-detail-card p:first-child { font-weight: bold; color: #fff2ae; }
+.industry-detail-card.next-level { border-color: var(--accent-gold); }
+.industry-detail-card.exhausted { opacity: 0.65; }
+@media (max-width: 760px) {
+    #sidebar-info { display: contents; }
+    #game-log-panel { grid-column: 1 / -1; height: 160px; min-height: 160px; }
+    #industries-body { grid-template-columns: minmax(0, 1fr); padding: 10px; }
+}

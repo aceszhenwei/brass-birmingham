@@ -668,6 +668,19 @@ class BoardRenderer {
         const era = this.state ? this.state.era : ERA.CANAL;
 
         for (const conn of CONNECTIONS) {
+            if (this.assetURL) {
+                const p = BoardAssets.linkPlacement(conn.id, this.layout);
+                if (p) {
+                    const angle = p.angle * Math.PI / 180, dx = 22 * Math.cos(angle), dy = 22 * Math.sin(angle);
+                    connGroup.appendChild(this.createElement('line', {
+                        x1: p.x * this.W - dx, y1: p.y * this.H - dy,
+                        x2: p.x * this.W + dx, y2: p.y * this.H + dy,
+                        stroke: 'transparent', 'stroke-width': 18,
+                        class: 'connection-line', 'data-connection': conn.id,
+                    }));
+                    continue;
+                }
+            }
             const pos1 = this.pos(conn.cities[0]);
             const pos2 = this.pos(conn.cities[1]);
             if (!pos1 || !pos2) continue;
@@ -922,7 +935,7 @@ class BoardRenderer {
 
         // Real chip artwork, when the tile set has been supplied locally.
         const art = (typeof BoardAssets !== 'undefined' && BoardAssets.tilesReady())
-            ? BoardAssets.tileUrl(tile.type, tile.tileData.level, tile.flipped)
+            ? BoardAssets.tileUrl(tile.type, tile.tileData.level, tile.flipped, playerColor)
             : null;
         // Nobody places a tile perfectly square. A small, stable rotation per
         // tile is what stops a grid of them reading as flat UI rectangles.
@@ -934,8 +947,7 @@ class BoardRenderer {
                 preserveAspectRatio: 'none',
                 class: 'built-tile' + (tile.flipped ? ' flipped' : ''),
             }));
-            // Only one colour set exists locally, so ownership is carried by a
-            // ring in the player's colour rather than by the chip itself.
+            // The recoloured ground carries ownership; retain the border too.
             g.appendChild(this.createElement('rect', {
                 x: x + 0.6, y: y + 0.6, width: s - 1.2, height: sh - 1.2,
                 rx: 2.5, ry: 2.5, fill: 'none',
@@ -1464,40 +1476,40 @@ class BoardRenderer {
             // On a real board a link is a small tile laid along the printed
             // route, not a stripe painted over it.
             const linkArt = (this.assetURL && typeof BoardAssets !== 'undefined'
-                && BoardAssets.tilesReady()) ? BoardAssets.linkUrl(link.type) : null;
-            if (linkArt) {
-                const mids = [];
-                if (conn.viaBrewery) {
-                    const bp = this.pos(conn.viaBrewery);
-                    if (bp) {
-                        mids.push([pos1, bp]);
-                        mids.push([bp, pos2]);
-                    }
-                } else {
-                    mids.push([pos1, pos2]);
-                }
-                for (const [a, b] of mids) {
-                    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-                    const angle = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
-                    // 297x126 art; keep that ratio at roughly a city-slot's width.
-                    const w = this.citySlotSize * 1.05, h = w * (126 / 297);
-                    const g = this.createGroup({
-                        transform: `rotate(${angle.toFixed(1)} ${mx.toFixed(1)} ${my.toFixed(1)})`,
-                        filter: 'url(#tileShadow)',
-                        class: 'connection-line built',
-                    });
-                    g.appendChild(this.createElement('image', {
-                        x: mx - w / 2, y: my - h / 2, width: w, height: h,
-                        href: linkArt, preserveAspectRatio: 'none',
-                    }));
-                    g.appendChild(this.createElement('rect', {
-                        x: mx - w / 2 + 0.5, y: my - h / 2 + 0.5,
-                        width: w - 1, height: h - 1, rx: 1.5, ry: 1.5,
-                        fill: 'none', stroke: playerColor,
-                        'stroke-width': 1.8, 'stroke-opacity': 0.95,
-                    }));
-                    linkGroup.appendChild(g);
-                }
+                && BoardAssets.tilesReady()) ? BoardAssets.linkUrl(link.type, playerColor) : null;
+            const placement = this.assetURL && BoardAssets.linkPlacement(connId, this.layout);
+            if (placement) {
+                const mx = placement.x * this.W, my = placement.y * this.H;
+                const angle = placement.angle;
+                // 297x126 art; keep that ratio at roughly a city-slot's width.
+                const w = this.citySlotSize * 1.05, h = w * (126 / 297);
+                const g = this.createGroup({
+                    transform: `rotate(${angle.toFixed(1)} ${mx.toFixed(1)} ${my.toFixed(1)})`,
+                    filter: 'url(#tileShadow)',
+                    class: 'connection-line built',
+                    'data-connection': connId, 'data-player': link.playerId,
+                });
+                const title = this.createElement('title');
+                title.textContent = `${this.state.players[link.playerId].name}: ${link.type} link`;
+                g.appendChild(title);
+                g.appendChild(this.createElement('rect', {
+                    x: mx - w / 2, y: my - h / 2, width: w, height: h,
+                    fill: playerColor, stroke: '#eee0bb', 'stroke-width': 0.7, rx: 2,
+                }));
+                if (linkArt) g.appendChild(this.createElement('image', {
+                    x: mx - w / 2, y: my - h / 2, width: w, height: h,
+                    href: linkArt, preserveAspectRatio: 'none',
+                }));
+                else g.appendChild(this.text(link.type === 'canal' ? '≈' : '≡', {
+                    x: mx, y: my + 4, 'text-anchor': 'middle', 'font-size': 14, fill: '#14181f',
+                }));
+                g.appendChild(this.createElement('rect', {
+                    x: mx - w / 2 + 0.5, y: my - h / 2 + 0.5,
+                    width: w - 1, height: h - 1, rx: 1.5, ry: 1.5,
+                    fill: 'none', stroke: playerColor,
+                    'stroke-width': 1.8, 'stroke-opacity': 0.95,
+                }));
+                linkGroup.appendChild(g);
                 continue;
             }
 

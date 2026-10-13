@@ -38,6 +38,9 @@ class UIManager {
     // ========================================================================
 
     bindEvents() {
+        document.getElementById('expand-industries').addEventListener('click', () => this.showIndustries());
+        document.getElementById('industries-close').addEventListener('click', () => document.getElementById('industries-dialog').close());
+        document.getElementById('industries-player').addEventListener('change', () => this.renderIndustrySheet());
         // Action buttons
         document.querySelectorAll('.action-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -72,6 +75,7 @@ class UIManager {
         // Escape key to cancel action
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
+                if (document.getElementById('industries-dialog').open) return; // native dialog handles Escape/focus
                 if (this.selectedAction) {
                     this.cancelAction();
                 }
@@ -404,7 +408,7 @@ class UIManager {
                                 `Era: ${eraStr}`;
                 if (chips) {
                     // The chip face already carries its level and industry.
-                    const art = BoardAssets.tileUrl(type, tile.level, false);
+                    const art = BoardAssets.tileUrl(type, tile.level, false, this.state.currentPlayer.color);
                     tilesHtml += `<div class="${cls} mat-tile-art" data-type="${type}" title="${tooltip}">
                         <img src="${art}" alt="" draggable="false">
                     </div>`;
@@ -421,6 +425,75 @@ class UIManager {
                 <div class="mat-tiles">${tilesHtml}</div>
             `;
             container.appendChild(div);
+        }
+        if (document.getElementById('industries-dialog').open) this.renderIndustrySheet();
+    }
+
+    showIndustries() {
+        const select = document.getElementById('industries-player');
+        select.innerHTML = '';
+        for (const player of this.state.players) {
+            const option = document.createElement('option');
+            option.value = player.id;
+            option.textContent = player.name;
+            select.appendChild(option);
+        }
+        select.value = this.state.currentPlayerId;
+        this.renderIndustrySheet();
+        const dialog = document.getElementById('industries-dialog');
+        if (!dialog.open) dialog.showModal();
+    }
+
+    renderIndustrySheet() {
+        const player = this.state.players[Number(document.getElementById('industries-player').value)];
+        if (!player) return;
+        const body = document.getElementById('industries-body');
+        body.innerHTML = '';
+        const note = document.createElement('p');
+        note.className = 'industries-note';
+        note.textContent = 'Public inventory. Build the lowest remaining level first. Costs are base costs; market resources may add to them. Income rewards advance spaces. Brewery production doubles in Rail.';
+        body.appendChild(note);
+        for (const [type, tiles] of Object.entries(player.industryTiles)) {
+            const section = document.createElement('section');
+            section.className = 'industry-detail';
+            const title = document.createElement('h3');
+            title.textContent = `${INDUSTRY_DISPLAY[type].name} · ${tiles.filter(t => !t.used).length} remaining`;
+            section.appendChild(title);
+            const next = this.state.getNextTile(player.id, type);
+            // Group identical tile copies, keeping used and remaining counts explicit.
+            const levels = [...new Set(tiles.map(t => t.level))];
+            for (const level of levels) {
+                const copies = tiles.filter(t => t.level === level), tile = copies[0];
+                const remaining = copies.filter(t => !t.used).length;
+                const eraAllowed = this.state.era === ERA.CANAL ? tile.canalEra : tile.railEra;
+                const isNext = next && next.level === level && remaining > 0;
+                const card = document.createElement('div');
+                card.className = `industry-detail-card${!remaining ? ' exhausted' : ''}${isNext ? ' next-level' : ''}`;
+                const art = typeof BoardAssets !== 'undefined' && BoardAssets.tilesReady()
+                    ? BoardAssets.tileUrl(type, level, false, player.color) : null;
+                const image = document.createElement(art ? 'img' : 'div');
+                if (art) { image.src = art; image.alt = `${INDUSTRY_DISPLAY[type].name} level ${level}`; }
+                else image.innerHTML = IndustryIcons.renderMarkup(type, 60, 'full');
+                card.appendChild(image);
+                const details = document.createElement('div');
+                const costs = [`£${tile.cost}`];
+                if (tile.costCoal) costs.push(`${tile.costCoal} coal`);
+                if (tile.costIron) costs.push(`${tile.costIron} iron`);
+                const production = type === INDUSTRY_TYPES.BREWERY
+                    ? `${this.state.era === ERA.RAIL ? 2 : 1} beer produced`
+                    : tile.resourceCubes ? `${tile.resourceCubes} ${type === INDUSTRY_TYPES.COAL_MINE ? 'coal' : 'iron'} produced`
+                    : `${tile.beersToSell} beer to sell`;
+                const era = tile.canalEra && tile.railEra ? 'Canal & Rail' : tile.canalEra ? 'Canal only' : 'Rail only';
+                const status = !remaining ? 'Used / developed' : !eraAllowed ? 'Unavailable this era'
+                    : isNext ? 'Next level to build' : 'Develop lower levels first';
+                for (const text of [`Level ${level} · ${remaining}/${copies.length} remaining · ${status}`,
+                    `Build: ${costs.join(' + ')}`, `Flip: ${tile.vp} VP · +${tile.income} income spaces · ${tile.linkVP} link icons`,
+                    production, `${era} · ${tile.canDevelop ? 'Can develop' : 'Cannot develop'}`]) {
+                    const line = document.createElement('p'); line.textContent = text; details.appendChild(line);
+                }
+                card.appendChild(details); section.appendChild(card);
+            }
+            body.appendChild(section);
         }
     }
 
