@@ -52,6 +52,8 @@ test('a human is asked to choose between equally close coal mines, then plays th
 
     ui.selectedCard = 0;
     ui.processActionStep();
+    assert.equal(ui.pendingData.review, true, 'the chosen card goes to explicit review');
+    ui.confirmPendingMove();
     assert.equal(state.boardIndustries.dudley_1.type, T.IRON_WORKS);
     assert.equal(wolves.resourceCubes, 2);
     assert.equal(kidd.resourceCubes, 3);

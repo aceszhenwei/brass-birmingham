@@ -958,7 +958,10 @@ class BoardRenderer {
                 d: `M${x + 1.4},${y + sh - 1.4} L${x + 1.4},${y + 1.4} L${x + s - 1.4},${y + 1.4}`,
                 fill: 'none', stroke: 'rgba(255,255,255,0.22)', 'stroke-width': 1,
             }));
-            if (!tile.flipped) this.drawResourceCubes(g, x, y, tile);
+            if (!tile.flipped) {
+                if (tile.type === INDUSTRY_TYPES.COAL_MINE || tile.type === INDUSTRY_TYPES.IRON_WORKS) this.drawResourceCount(g, x, y, tile);
+                else this.drawResourceCubes(g, x, y, tile);
+            }
             return;
         }
 
@@ -1031,6 +1034,21 @@ class BoardRenderer {
         });
         parent.appendChild(g);
         return g;
+    }
+
+    drawResourceCount(parent, x, y, tile) {
+        const w = this.citySlotSize * 0.42, h = this.citySlotH * 0.35;
+        const bx = x + this.citySlotSize - w, by = y + this.citySlotH - h;
+        const g = this.createGroup({ class: 'live-resource-count', 'data-remaining': tile.resourceCubes,
+            role: 'img', 'aria-label': `${tile.resourceCubes} ${tile.type === INDUSTRY_TYPES.COAL_MINE ? 'coal' : 'iron'} remaining` });
+        // Cover the printed capacity cubes: the badge is always live supply.
+        g.appendChild(this.createElement('rect', { x: bx, y: by, width: w, height: h,
+            rx: 1.5, fill: '#111820', stroke: '#f5e4bb', 'stroke-width': 0.7 }));
+        g.appendChild(this.text(tile.resourceCubes, { x: bx + w / 2, y: by + h * 0.56,
+            'text-anchor': 'middle', 'font-size': h * 0.65, 'font-weight': 'bold', fill: '#fff2ae' }));
+        g.appendChild(this.text('LEFT', { x: bx + w / 2, y: by + h * 0.9,
+            'text-anchor': 'middle', 'font-size': h * 0.28, fill: '#f5ecdb' }));
+        parent.appendChild(g);
     }
 
     drawResourceCubes(parent, x, y, tile) {
@@ -1691,7 +1709,7 @@ class BoardRenderer {
             // Farm breweries are standalone board locations, not city slots
             if (isBreweryFarm(slot.cityId)) {
                 const farmEl = this.svg.querySelector(`.brewery-farm[data-farm="${slot.cityId}"]`);
-                if (farmEl) farmEl.classList.add('highlight-slot');
+                if (farmEl) { farmEl.classList.add('highlight-slot'); farmEl.setAttribute('tabindex', '0'); farmEl.setAttribute('role', 'button'); }
                 continue;
             }
             const el = this.svg.querySelector(
@@ -1699,6 +1717,7 @@ class BoardRenderer {
             );
             if (el) {
                 el.classList.add('highlight-slot');
+                el.setAttribute('tabindex', '0'); el.setAttribute('role', 'button');
             }
         }
     }
@@ -1707,7 +1726,7 @@ class BoardRenderer {
         this.clearHighlights();
         for (const connId of validConnections) {
             const els = this.svg.querySelectorAll(`[data-connection="${connId}"]`);
-            els.forEach(el => el.classList.add('highlight'));
+            els.forEach(el => { el.classList.add('highlight'); el.setAttribute('tabindex', '0'); el.setAttribute('role', 'button'); });
         }
     }
 

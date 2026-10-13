@@ -29,11 +29,19 @@ build canals and railways, develop industries, and sell goods across two eras:
 
 ## On your turn
 
-1. **Select an action** from the action panel: Build, Network, Develop, Sell, Loan, Scout, or Pass.
+1. **Start with a card, a map target, or an action.** Clicking a card highlights the legal builds it permits. Clicking a map slot or route can start Build or Network directly. Develop, Sell, Loan, Scout, and Pass start from their action buttons.
 2. **Follow the phase bar.** It shows your current step, what to do next, and a cancel button. **Escape** cancels at any time.
-3. **Choose your target** in the dialog or on the board.
+3. **Choose your target on the map** for Build or Network. If a slot supports several industries, choose from just those options. A second Rail link is selected on the map too; **Keep one link** skips it.
 4. **Make any choices** the rules leave to you (which coal, iron, beer, or merchant) when there is more than one option.
-5. **Click a valid card to discard.** Valid cards glow gold and invalid ones are dimmed.
+5. **Choose a valid discard card** if you have not already selected one. Valid cards glow gold and invalid ones are dimmed.
+6. **Review and confirm Build or Network.** The review bar shows the target, total cost including resource purchases, and discard card. Nothing is spent or discarded until confirmation. **Change target** keeps the selected card; **Cancel** clears the selection without changing the game. Other actions keep their existing discard flow.
+
+The sidebar shows compact summaries by default. Click turn order or markets
+to see their detailed lists, or a player to see cards and links remaining.
+Expanded player details stay open across refreshes. The log retains its own
+space. On coal and iron tiles, the live **N LEFT** badge replaces the printed
+capacity symbols, so it indicates current supply rather than the initial
+quantity. Flipped tiles retain their printed scoring information.
 
 If you can't pay your income at the end of a round, you choose which of your
 industry tiles to sell. Disabled action buttons have tooltips explaining why
@@ -42,7 +50,7 @@ cards". Market prices, turn order, and scoring are handled for you.
 
 ![Build dialog with the cost breakdown](../screenshots/build_modal.jpg)
 
-*Build: choose from the industries available at locations matching your cards.*
+*Build options are now shown for a clicked multi-industry slot; the map stays visible during ordinary target selection.*
 
 ![Sell dialog with merchant beer](../screenshots/sell_modal.jpg)
 

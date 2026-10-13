@@ -81,6 +81,7 @@
             <button class="phase-cancel-btn" id="phase-cancel-btn">Cancel</button>
         </div>
 
+        <div id="action-details" class="hidden" aria-live="polite"></div>
         <!-- Main Game Area -->
         <div id="game-area">
             <!-- Board -->
@@ -93,16 +94,16 @@
             <!-- Right Panel -->
             <div id="right-panel">
                 <div id="sidebar-info">
-                <section id="turn-order-panel" aria-label="Turn order and round spending">
-                    <h3>Turn order</h3>
+                <details id="turn-order-panel" aria-label="Turn order and round spending">
+                    <summary id="turn-order-glance">Turn order</summary>
                     <div id="turn-order-summary" aria-live="polite"></div>
-                </section>
+                </details>
                 <!-- Player Info Panels -->
                 <div id="player-panels"></div>
 
                 <!-- Markets -->
-                <div id="markets-panel">
-                    <h3>Markets</h3>
+                <details id="markets-panel">
+                    <summary id="markets-glance">Markets</summary>
                     <div id="coal-market" class="market">
                         <div class="market-header">
                             <div class="market-label">Coal</div>
@@ -117,7 +118,7 @@
                         </div>
                         <div class="market-track" id="iron-track"></div>
                     </div>
-                </div>
+                </details>
 
                 <!-- Game Log -->
                 </div>
