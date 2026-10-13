@@ -1105,8 +1105,8 @@ class BoardRenderer {
 
             if (this.assetURL) {
                 // The merchant building is printed on the board. Draw one hit
-                // area per printed trading space, plus the beer barrels, which
-                // are game state the artwork cannot show.
+                // area per printed trading space. Goods and beer are game
+                // state: the board image only contains empty trading spaces.
                 const S = this.citySlotSize, SH = this.citySlotH;
                 const anchor = this.pos(merchId);
                 const spaces = BoardAssets.slotPositions(merchId, this.layout)
@@ -1118,9 +1118,36 @@ class BoardRenderer {
                     g.appendChild(this.createElement('rect', {
                         x: cx - S / 2, y: cy - SH / 2, width: S, height: SH,
                         rx: 3, ry: 3, class: 'merchant-bg',
-                        fill: 'rgba(0,0,0,0.10)',
+                        fill: tiles[i] ? '#14181f' : 'rgba(0,0,0,0.10)',
                         stroke: 'rgba(217,177,78,0.3)', 'stroke-width': 0.9,
                     }));
+                    const mt = tiles[i];
+                    if (mt) {
+                        const goods = this.createGroup({
+                            class: 'merchant-goods', 'data-buys': mt.buys,
+                            transform: `translate(${cx}, ${cy})`,
+                        });
+                        const label = mt.buys === 'any' ? 'ANY'
+                            : mt.buys === 'blank' ? 'NONE'
+                            : INDUSTRY_DISPLAY[mt.buys].shortName;
+                        const title = this.createElement('title');
+                        title.textContent = mt.buys === 'any'
+                            ? 'Buys cotton, manufactured goods and pottery'
+                            : mt.buys === 'blank' ? 'No demand'
+                            : `Buys ${INDUSTRY_DISPLAY[mt.buys].name}`;
+                        goods.appendChild(title);
+                        if (mt.buys !== 'any' && mt.buys !== 'blank') {
+                            const icon = this.getIndustryIcon(mt.buys, Math.min(S, SH) * 0.48, 'full');
+                            icon.setAttribute('transform', 'translate(0, -2)');
+                            goods.appendChild(icon);
+                        }
+                        goods.appendChild(this.text(label, {
+                            x: 0, y: mt.buys === 'any' || mt.buys === 'blank' ? 3 : SH / 2 - 5,
+                            'text-anchor': 'middle', 'dominant-baseline': 'central',
+                            'font-size': '6.5', fill: '#e2c98c',
+                        }));
+                        g.appendChild(goods);
+                    }
                     if (tiles[i] && tiles[i].hasBeer) {
                         this.drawBarrel(g, cx - S / 2 + 6, cy - SH / 2 + 6, true);
                     }
