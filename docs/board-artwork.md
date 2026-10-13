@@ -35,6 +35,12 @@ or a crossed empty space marked `0 USED`. Blank merchant tiles show `0 NONE`.
 Non-blank merchants refill at the start of the Rail Era. Demand remains
 visible after beer is consumed. The fallback board uses barrel counts too.
 
+On unflipped coal and iron tiles, an **N LEFT** badge covers the printed
+capacity symbols and displays the current supply. Flipped scoring faces
+remain visible. The two wildcard supply spaces show the bundled wild
+location and wild industry card images; these stacks are decorative and
+do not alter the hand or Scout rules.
+
 These overlays refresh during normal board updates and after artwork loads.
 Market and turn-track coordinates match the bundled retail board image;
 town calibration adjusts the adjacent merchant beer positions along with

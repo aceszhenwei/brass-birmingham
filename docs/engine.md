@@ -119,7 +119,7 @@ then as AI, and gets the same game.
 
 `UIManager` sends every decision, human or AI, through `playMove` → `logic.play`:
 
-- **After every successful move** it presents the events: log entries, the Canal scoring screen, the game-over table. It then calls `continueGame()`, which asks `getCurrentDecision()` and:
+- **After every successful move** it presents the events: log entries, the Canal and Rail scoring reviews, then the game-over table. It then calls `continueGame()`, which asks `getCurrentDecision()` and:
   - prompts a human for a shortfall, or plays the automatic choice for an AI seat;
   - announces a new player's turn;
   - schedules the AI.
@@ -128,3 +128,16 @@ then as AI, and gets the same game.
 Low-level steps (`advanceTurn`, `endRound`, `endCanalEra`, `endGame`,
 `applyMove`) remain available for tests that examine one step in isolation.
 Real games should always go through `play`.
+
+## UI undo and scoring inspection
+
+The UI keeps independent snapshots before successful human actions that leave
+the same turn active. Undo/reset restores a snapshot in place, preserving
+references held by the logic and renderer, and restores the UI log. History
+is cleared at turn, round and era boundaries. This uses the existing clone
+API; the progression engine still owns every forward transition.
+
+For a scoring review, the UI replays a move on an isolated clone once the
+draw deck is empty, capturing the board immediately before the engine scores
+it. Per-component contributions are queried through `calculateEraScore` on
+further independent copies. The real state and scoring rules are unchanged.
