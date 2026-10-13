@@ -35,6 +35,11 @@ heuristic's single best move).
 - It plays `p3-state`. `p3-state` plays `p2-state` on the same seeds.
 - **Mixed tables** (held-out seeds; 40 seeds × every rotation): 3 players `candidate, p3-state, p2-state`; 4 players `candidate, p3-state, p2-state, normal`. If there is no candidate, `p3-state` takes its place and `p4-state` joins as the fourth seat in place of `normal` for reference.
 
+**Amendments after exploration** (recorded before any held-out game; criteria unchanged).
+- **The candidate is `p4-state`.** It was the only four-action planner to beat `p3-state` in exploration (+3.26 ± 1.94 pooled). `p4-state-b` was worse (−4.44 ± 1.95) and `p4-state-n` no different (−0.89 ± 1.92), and full beat both bounded variants. The bounded variants are not validated.
+- **Depth 3 against depth 2 is not re-run on the new held-out seeds.** The Assignment 11 held-out result (`p3-state` against `p2-state`, seeds 700000: +9.79 ± 1.77) is reused. The moved planner reproduces the Assignment 11 decisions exactly, so a re-run would repeat it.
+- **The mixed tables are unchanged:** 3 players `p4-state, p3-state, p2-state`; 4 players `p4-state, p3-state, p2-state, normal`.
+
 ## Decision criteria (all on held-out seeds)
 
 A four-action planner replaces `p3-state` in production only if:
