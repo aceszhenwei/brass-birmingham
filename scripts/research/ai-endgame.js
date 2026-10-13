@@ -3,6 +3,11 @@
 // candidates (docs/research/ai-endgame-evaluation-a14.md).
 //
 //   node scripts/research/ai-endgame.js [--players 2,3,4] [--examples 6]
+//   node scripts/research/ai-endgame.js --timing [--players 2,3,4]
+//
+// --timing: decision times of the production planner and candidate C with
+// the production wall-clock cut-off (2.5 s), one self-play game per player
+// count each (seed 140900 + players), run one at a time on an idle machine.
 //
 // Replays the Assignment 13 self-play games (production four-action planner at
 // every seat, no wall-clock cut-off; seeds 900000 + 1000 * players + i, 10/8/6
@@ -33,7 +38,7 @@ const GAMES = { 2: 10, 3: 8, 4: 6 };
 const EXAMPLES = Number(arg('examples', 6));
 const E = loadEngine();
 const A = E.ACTIONS;
-const planner = (name) => ({ ...E.AIPlanner.PRODUCTION, maxMs: Infinity, ...(name ? PLANNER_CONFIGS[name] : {}) });
+const planner = (name) => ({ ...E.AIPlanner.A12, maxMs: Infinity, ...(name ? PLANNER_CONFIGS[name] : {}) });
 const POLICIES = { base: planner(null), A: planner('p4-a'), B: planner('p4-b'), C: planner('p4-c') };
 const NON_SCORING = new Set([A.LOAN, A.DEVELOP, A.SCOUT, A.PASS]);
 
@@ -72,6 +77,36 @@ function playOut(real, id, cfg, seed) {
     out.vp = state.players[id].vp;
     out.money = state.players[id].money;
     return out;
+}
+
+if (process.argv.includes('--timing')) {
+    console.log('| Players | Policy | Decisions | Mean ms | p95 ms | Max ms | Cut off | Longest two-action turn (ms) | Final VP (mean) |');
+    console.log('|---|---|---|---|---|---|---|---|---|');
+    for (const players of PLAYERS) {
+        for (const name of ['base', 'C']) {
+            const cfg = { ...POLICIES[name], maxMs: E.AIPlanner.A12.maxMs };
+            const seed = 140900 + players;
+            const names = ['A', 'B', 'C', 'D'].slice(0, players);
+            const state = new E.GameState(players, names, names.map(() => ({ isAI: true, difficulty: 'normal' })), { seed });
+            const logic = new E.GameLogic(state);
+            const rng = new E.SeededRandom(aiSeedFor(seed));
+            const ms = [];
+            let cut = 0, turn = 0, longest = 0, current = null;
+            for (let d = logic.getCurrentDecision(); d.type !== 'gameOver'; d = logic.getCurrentDecision()) {
+                if (d.type === 'shortfall') { logic.play(d.playerId, logic.defaultShortfallMove(d.playerId)); continue; }
+                const key = `${state.era}:${state.round}:${d.playerId}`;
+                if (key !== current) { current = key; turn = 0; }
+                const dec = E.AIPlanner.chooseAction(state, logic, d.playerId, 'normal', rng, { planner: cfg });
+                ms.push(dec.planStats.ms);
+                if (dec.planStats.timedOut) cut++;
+                turn += dec.planStats.ms;
+                longest = Math.max(longest, turn);
+                logic.play(d.playerId, logic.moveFromDecision(dec));
+            }
+            console.log(`| ${players} | ${name} | ${ms.length} | ${mean(ms).toFixed(0)} | ${quantile(ms, 0.95).toFixed(0)} | ${Math.max(...ms).toFixed(0)} | ${cut} | ${longest.toFixed(0)} | ${mean(state.players.map(p => p.vp)).toFixed(1)} |`);
+        }
+    }
+    process.exit(0);
 }
 
 const all = [];

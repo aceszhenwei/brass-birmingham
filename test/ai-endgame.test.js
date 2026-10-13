@@ -13,8 +13,9 @@ const fixture = require('./fixtures/assignment14-endgame.json');
 const LAST = fixture.positions.filter(f => f.actionsThisTurn === 0);
 
 const E = loadEngine();
-const A12 = { ...E.AIPlanner.PRODUCTION, endgame: 'a12', scoringLinks: false, maxMs: Infinity };
+const A12 = { ...E.AIPlanner.A12, maxMs: Infinity };
 const ENDGAME = { ...A12, endgame: 'tiebreak' };
+const PRODUCTION = { ...E.AIPlanner.PRODUCTION, maxMs: Infinity };
 const LINKS = { ...A12, scoringLinks: true };
 const BOTH = { ...A12, endgame: 'tiebreak', scoringLinks: true };
 
@@ -52,6 +53,16 @@ test('endgame, scoring links and both: no last-round loan, and more VP than the 
             assert.ok(r.moves.every(m => m.type !== E.ACTIONS.LOAN), `seed ${f.seed}: ${JSON.stringify(r.moves)}`);
             assert.ok(r.score >= base.score + 2, `seed ${f.seed}: ${r.score} vs ${base.score}`);
         }
+    }
+});
+
+test('production uses both options and avoids the last-round loans of the Assignment 12 planner', () => {
+    assert.equal(E.AIPlanner.PRODUCTION.endgame, 'tiebreak');
+    assert.equal(E.AIPlanner.PRODUCTION.scoringLinks, true);
+    for (const f of LAST) {
+        const r = playLastTurn(f, PRODUCTION);
+        assert.ok(r.moves.every(m => m.type !== E.ACTIONS.LOAN));
+        assert.ok(r.score > playLastTurn(f, A12).score);
     }
 });
 

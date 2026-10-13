@@ -42,7 +42,7 @@ const SEEDS = Number(arg('seeds', 6));
 const EXAMPLES = Number(arg('examples', 3));
 const E = loadEngine();
 const A = E.ACTIONS;
-const CONFIG = { planner: { ...E.AIPlanner.PRODUCTION, maxMs: Infinity } };
+const CONFIG = { planner: { ...E.AIPlanner.A12, maxMs: Infinity } }; // the Assignment 12 planner (production in Assignment 13)
 
 const pct = (a, b) => `${a} of ${b} (${b ? (100 * a / b).toFixed(0) : 0}%)`;
 const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN);

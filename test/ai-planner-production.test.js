@@ -1,9 +1,10 @@
 'use strict';
 
-// The production AI since Assignment 12: AIPlanner.chooseAction (js/aiPlanner.js).
-// Normal and Hard plan four actions ahead; Easy plays the heuristic. These
-// tests pin the recorded games, the planner's integration with turn
-// progression, its search budget, and its information fairness.
+// The production AI since Assignment 12: AIPlanner.chooseAction (js/aiPlanner.js),
+// with the Assignment 14 endgame options. Normal and Hard plan four actions
+// ahead; Easy plays the heuristic. These tests pin the recorded games (and
+// the Assignment 12 planner's, AIPlanner.A12), the planner's integration with
+// turn progression, its search budget, and its information fairness.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -12,7 +13,8 @@ const { createGame, aiSeedFor, playGame } = require('./helpers/headless');
 const { fingerprint } = require('./helpers/fingerprint');
 const { checkInvariants } = require('./helpers/invariants');
 const { createPlanner } = require('../scripts/research/planner');
-const baseline = require('./fixtures/assignment12-baseline.json');
+const baseline = require('./fixtures/assignment14-baseline.json');
+const baselineA12 = require('./fixtures/assignment12-baseline.json');
 
 const E = loadEngine();
 // The production plan configuration without its wall-clock budget, so the
@@ -31,8 +33,17 @@ for (const players of [2, 3, 4]) {
     });
 }
 
+test('the Assignment 12 planner (AIPlanner.A12) still replays its recorded games exactly', () => {
+    const options = { planner: { ...E.AIPlanner.A12, maxMs: Infinity } };
+    for (const players of [2, 3, 4]) {
+        const g = baselineA12.games[players][0];
+        const r = playGame({ players, seed: g.seed, difficulty: g.difficulty, chooseAction: E.AIPlanner.chooseAction, aiOptions: options, E });
+        assert.equal(fingerprint(r.state, { steps: r.steps, actions: r.actions }), g.fingerprint, `${players} players, seed ${g.seed}`);
+    }
+});
+
 test('Easy plays the heuristic; Normal and Hard play the four-action planner', () => {
-    const p4 = createPlanner(E, { depth: 4, evaluate: 'state', widths: [6, 3, 3] });
+    const p4 = createPlanner(E, { depth: 4, evaluate: 'state', widths: [6, 3, 3], endgame: 'tiebreak', scoringLinks: true });
     const { state, logic } = createGame(E, { players: 3, seed: 141 });
     const aiRng = new E.SeededRandom(aiSeedFor(141));
     for (let k = 0; k < 30; k++) {

@@ -1,5 +1,5 @@
 // ============================================================================
-// Brass: Birmingham - AI planner (production since Assignment 12)
+// Brass: Birmingham - AI planner (production since Assignment 12, revised in Assignment 14)
 // ============================================================================
 // Short-horizon planning on top of the heuristic AI (aiPlayer.js). For each
 // decision the planner looks a few of the player's OWN actions ahead and plays
@@ -13,7 +13,8 @@
 // rule-checked execution, which does not advance the turn); the real game is
 // never touched.
 //
-// Model (docs/research/ai-planning-a11.md, ai-planning-a12.md):
+// Model (docs/research/ai-planning-a11.md, ai-planning-a12.md,
+// ai-endgame-evaluation-a14.md):
 //   - Within the current turn the model is exact: the player's consecutive
 //     actions with the cards in hand.
 //   - Beyond the current turn it assumes opponents do nothing in between, no
@@ -23,6 +24,10 @@
 //   - Candidates come from the heuristic (AIPlayer explain): the best move of
 //     each action type plus the next-best builds and links. `widths[k]` are
 //     kept at plan depth k (the last level takes the single best move).
+//     Within the current turn, the legal link that would score the most VP
+//     now is also searched (scoringLinks).
+//   - After the player's last action of the game, income and money count
+//     only as tie-breaks (endgame 'tiebreak').
 //   - Evaluation 'state': the change in a static position value (VP, VP the
 //     era's scoring would add now, expected VP of unflipped tiles, income and
 //     money, in the heuristic's units). 'sum': the heuristic's action scores
@@ -36,16 +41,21 @@
 // AIPlanner.chooseAction(state, logic, playerId, difficulty, rng, opts) is the
 // production entry point, with AIPlayer.chooseAction's signature: Easy plays
 // the heuristic; Normal and Hard plan with AIPlanner.PRODUCTION (four actions
-// ahead, docs/research/ai-planning-a12.md).
+// ahead, docs/research/ai-planning-a12.md; endgame options since Assignment
+// 14). opts.planner = AIPlanner.A12 plays the Assignment 12 planner.
 // ============================================================================
 
 const AIPlanner = (() => {
-    // Production since Assignment 12: four actions ahead, 6, 3 and 3 candidates
-    // at the first three levels, at most 2.5 s per decision. THREE_ACTION is the
-    // planner first promoted in Assignment 12 (a research baseline).
-    const PRODUCTION = Object.freeze({ depth: 4, evaluate: 'state', widths: [6, 3, 3], gamma: 0.6, maxMs: 2500, maxStates: Infinity });
-    const THREE_ACTION = Object.freeze({ ...PRODUCTION, depth: 3, widths: [6, 3] });
-    // Assignment 14 options (docs/research/ai-endgame-evaluation-a14.md):
+    // A12: the production planner of Assignment 12 (four actions ahead, 6, 3
+    // and 3 candidates at the first three levels, at most 2.5 s per decision),
+    // kept as a reproducible baseline. PRODUCTION since Assignment 14: the same
+    // with the endgame cash valuation and scoring-link candidates (below).
+    // THREE_ACTION is the planner first promoted in Assignment 12.
+    const A12 = Object.freeze({ depth: 4, evaluate: 'state', widths: [6, 3, 3], gamma: 0.6, maxMs: 2500, maxStates: Infinity, endgame: 'a12', scoringLinks: false });
+    const PRODUCTION = Object.freeze({ ...A12, endgame: 'tiebreak', scoringLinks: true });
+    const THREE_ACTION = Object.freeze({ ...A12, depth: 3, widths: [6, 3] });
+    // Assignment 14 options (docs/research/ai-endgame-evaluation-a14.md),
+    // both on in PRODUCTION:
     //   endgame 'tiebreak': once the player's last action of the game is
     //     taken, money and income count only as the rulebook's tie-breaks
     //     (income first, then money), not at their usual VP-equivalent; and
@@ -160,8 +170,6 @@ const AIPlanner = (() => {
             return best ? { move: { type: ACTIONS.NETWORK, card: c.cardIndex, links: [best.connectionId] }, score: best.score } : null;
         }
 
-        // `index`: the number of plan actions taken to reach the position
-
         // Apply a move to a clone; null if it fails
         function after(state, move) {
             const s = state.clone();
@@ -178,6 +186,7 @@ const AIPlanner = (() => {
         const eraEndIndex = cfg.endgame !== 'tiebreak' ? Infinity
             : roundsLeft <= 1 ? ctx.actionsLeft : roundsLeft === 2 ? ctx.actionsLeft + ACTIONS_PER_TURN : Infinity;
         const finalIndex = obs.era === ERA.RAIL ? eraEndIndex : Infinity;
+        // `index`: the number of plan actions taken to reach the position
         const positionValue = (state, logic, index) => positionValueOf(state, logic, playerId, cfg.aiOptions, index >= finalIndex);
         const withScoringLink = (index) => cfg.scoringLinks && index <= ctx.actionsLeft;
 
@@ -271,5 +280,5 @@ const AIPlanner = (() => {
         return { action: r.move.type, move: r.move, plan: r.plan, planStats: { states: r.states, ms: r.ms, timedOut: r.timedOut } };
     }
 
-    return { chooseAction, plan, positionValue: positionValueOf, PRODUCTION, THREE_ACTION, DEFAULTS };
+    return { chooseAction, plan, positionValue: positionValueOf, PRODUCTION, A12, THREE_ACTION, DEFAULTS };
 })();
