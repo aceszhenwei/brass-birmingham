@@ -13,6 +13,7 @@ class UIManager {
         this.actionStep = 0; // Multi-step action tracking
         this.pendingData = {}; // Data accumulated during multi-step actions
         this.gameLog = []; // Game log entries
+        this.undoHistory = [];
         this.turnPlayerId = null; // whose turn was last announced (turn transitions)
     }
 
@@ -44,6 +45,8 @@ class UIManager {
         document.getElementById('game-board').addEventListener('keydown', e => {
             if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.onBoardClick(e); }
         });
+        document.getElementById('undo-action').onclick = () => this.restoreTurn(false);
+        document.getElementById('reset-turn').onclick = () => this.restoreTurn(true);
         // Action buttons
         document.querySelectorAll('.action-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -91,6 +94,7 @@ class UIManager {
     // ========================================================================
 
     refresh() {
+        this.updateUndoControls();
         this.updateTopBar();
         this.updatePlayerPanels();
         this.updateTurnOrder();
@@ -1132,8 +1136,79 @@ class UIManager {
     // Every decision — human or AI, action or shortfall — is played through
     // the engine, which also advances the game (turns, rounds, income, era
     // scoring, game end) and reports what happened as events.
+    updateUndoControls() {
+        const enabled = this.undoHistory.length > 0 && !this.state.currentPlayer.isAI
+            && this.logic.getCurrentDecision().type === 'action';
+        for (const id of ['undo-action', 'reset-turn']) document.getElementById(id).disabled = !enabled;
+    }
+
+    restoreTurn(reset) {
+        if (!this.undoHistory.length || this.state.currentPlayer.isAI
+            || this.logic.getCurrentDecision().type !== 'action') return;
+        const snapshot = reset ? this.undoHistory[0] : this.undoHistory[this.undoHistory.length - 1];
+        if (reset) this.undoHistory = []; else this.undoHistory.pop();
+        // Preserve references held by main.js, the renderer and the logic.
+        for (const key of Object.keys(this.state)) delete this.state[key];
+        Object.assign(this.state, snapshot.state.clone());
+        this.gameLog = snapshot.log.slice();
+        this.cancelAction();
+        this.closeModal();
+        this.renderLog();
+        this.refresh();
+    }
+
+    scoringBreakdown() {
+        const board = this.scoringBoard;
+        if (!board) return '';
+        const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        let html = '';
+        for (const player of board.players) {
+            html += `<details><summary>${escape(player.name)} — scoring breakdown</summary><ul>`;
+            // Isolate each component and ask the existing scoring implementation
+            // for its contribution. No scoring rules are reimplemented in UI.
+            for (const [key, link] of Object.entries(board.boardLinks)) {
+                if (link.playerId !== player.id) continue;
+                const copy = board.clone(); copy.boardLinks = { [key]: link };
+                const score = copy.calculateEraScore().find(s => s.playerId === player.id);
+                html += `<li>${escape(key)}: ${score.linkVP} link VP</li>`;
+            }
+            for (const [field, tiles] of [['boardIndustries', board.boardIndustries], ['breweryFarmTiles', board.breweryFarmTiles]]) {
+                for (const [key, tile] of Object.entries(tiles)) {
+                    if (!tile || tile.playerId !== player.id) continue;
+                    const copy = board.clone(); copy.boardIndustries = {}; copy.breweryFarmTiles = {};
+                    copy[field] = { [key]: tile };
+                    const score = copy.calculateEraScore().find(s => s.playerId === player.id);
+                    html += `<li>${escape(key)} (${escape(tile.type || 'industry')}, ${tile.flipped ? 'flipped' : 'unflipped'}): ${score.industryVP} industry VP</li>`;
+                }
+            }
+            html += '</ul></details>';
+        }
+        return html;
+    }
+
     playMove(playerId, move) {
+        const before = this.state.clone();
+        const log = this.gameLog.slice();
+        // Replay only on an independent copy to capture the board immediately
+        // before scoring, including the final action and income shortfalls.
+        let scoringBoard = null;
+        if (before.drawDeck.length === 0) {
+        const probe = before.clone();
+        const calculate = probe.calculateEraScore;
+        probe.calculateEraScore = function () {
+            scoringBoard = this.clone();
+            return calculate.call(this);
+        };
+        new GameLogic(probe).play(playerId, move);
+        }
         const result = this.logic.play(playerId, move);
+        if (result.success) {
+            this.scoringBoard = scoringBoard;
+            const sameTurn = this.state.era === before.era && this.state.round === before.round
+                && this.state.currentPlayerId === playerId && this.logic.getCurrentDecision().type === 'action';
+            if (!before.players[playerId].isAI && sameTurn) this.undoHistory.push({ state: before, log });
+            else this.undoHistory = [];
+        }
         if (result.success) {
             const msg = result.message;
             this.addLogEntry(playerId, msg.charAt(0).toLowerCase() + msg.slice(1));
@@ -1297,7 +1372,7 @@ class UIManager {
             } else if (ev.type === 'gameEnd') {
                 this.addLogEntry(null, 'Final Scoring', 'era');
                 this.refresh();
-                this.showGameOver(ev.ranking);
+                this.showScoring('Rail Era Complete', ev.scores, () => this.showGameOver(ev.ranking));
                 return;
             }
         }
@@ -1475,28 +1550,28 @@ class UIManager {
     // Scoring Display
     // ========================================================================
 
-    showScoring(title, scores) {
+    showScoring(title, scores, onContinue = null) {
         const overlay = document.getElementById('scoring-overlay');
         document.getElementById('scoring-title').textContent = title;
 
-        let html = '<table class="scoring-table"><thead><tr><th>Player</th><th>Link VP</th><th>Industry VP</th><th>Total VP</th></tr></thead><tbody>';
+        let html = '<table class="scoring-table"><thead><tr><th>Player</th><th>Link VP</th><th>Industry VP</th><th>Era VP</th><th>Cumulative VP</th></tr></thead><tbody>';
         for (const s of scores) {
             const player = this.state.players[s.playerId];
             html += `<tr>
                 <td style="color:${player.color}">${player.name}</td>
                 <td>${s.linkVP}</td>
                 <td>${s.industryVP}</td>
-                <td class="total-row">${s.totalVP}</td>
+                <td>${s.linkVP + s.industryVP}</td><td class="total-row">${s.totalVP}</td>
             </tr>`;
         }
         html += '</tbody></table>';
 
-        document.getElementById('scoring-details').innerHTML = html;
+        document.getElementById('scoring-details').innerHTML = html + this.scoringBreakdown();
         overlay.classList.remove('hidden');
 
         const continueFromScoring = () => {
             overlay.classList.add('hidden');
-            this.continueGame(); // only safe to resume AFTER the modal is dismissed
+            if (onContinue) onContinue(); else this.continueGame(); // only safe to resume AFTER the modal is dismissed
         };
         document.getElementById('scoring-continue-btn').onclick = continueFromScoring;
 

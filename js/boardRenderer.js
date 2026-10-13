@@ -217,6 +217,17 @@ class BoardRenderer {
             x: 0, y: 0, width: this.W, height: this.H,
             href: this.assetURL, preserveAspectRatio: 'none',
         }));
+        // Scout supplies: decorative stacks, not cards in a player's hand.
+        for (const [href, y, label] of [
+            ['assets/cards/wild-location.jpg', 0.235, 'Wild location supply'],
+            ['assets/cards/wild-industry.jpg', 0.369, 'Wild industry supply'],
+        ]) {
+            const image = this.createElement('image', { href, x: this.W * 0.062,
+                y: this.H * y, width: this.W * 0.149, height: this.H * 0.105,
+                preserveAspectRatio: 'xMidYMid meet', 'aria-label': label });
+            const title = this.createElement('title'); title.textContent = label;
+            image.appendChild(title); g.appendChild(image);
+        }
         this.svg.appendChild(g);
     }
 

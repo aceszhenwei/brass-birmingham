@@ -2331,3 +2331,8 @@ h1, h2, h3 {
 #action-details span { flex: 1 1 280px; line-height: 1.5; }
 #action-details button { padding: 7px 12px; background: var(--bg-medium); color: #fff2ae; border: 1px solid var(--accent-gold); border-radius: 4px; cursor: pointer; }
 .card:focus-visible, .connection-line:focus-visible, .industry-slot:focus-visible { outline: 2px solid #fff2ae; outline-offset: 3px; }
+
+.turn-history { display:flex; flex-wrap:wrap; gap:6px; padding:6px; }
+.turn-history small { flex-basis:100%; }
+#scoring-details { max-height:65vh; overflow:auto; text-align:left; }
+#scoring-details details { padding:8px; }
