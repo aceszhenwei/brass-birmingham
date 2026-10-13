@@ -35,11 +35,16 @@
 //
 // AIPlanner.chooseAction(state, logic, playerId, difficulty, rng, opts) is the
 // production entry point, with AIPlayer.chooseAction's signature: Easy plays
-// the heuristic; Normal and Hard plan with AIPlanner.PRODUCTION.
+// the heuristic; Normal and Hard plan with AIPlanner.PRODUCTION (four actions
+// ahead, docs/research/ai-planning-a12.md).
 // ============================================================================
 
 const AIPlanner = (() => {
-    const PRODUCTION = Object.freeze({ depth: 3, evaluate: 'state', widths: [6, 3], gamma: 0.6, maxMs: 2500, maxStates: Infinity });
+    // Production since Assignment 12: four actions ahead, 6, 3 and 3 candidates
+    // at the first three levels, at most 2.5 s per decision. THREE_ACTION is the
+    // planner first promoted in Assignment 12 (a research baseline).
+    const PRODUCTION = Object.freeze({ depth: 4, evaluate: 'state', widths: [6, 3, 3], gamma: 0.6, maxMs: 2500, maxStates: Infinity });
+    const THREE_ACTION = Object.freeze({ ...PRODUCTION, depth: 3, widths: [6, 3] });
     const DEFAULTS = Object.freeze({ depth: 2, evaluate: 'sum', widths: [6, 3], gamma: 0.6, maxMs: Infinity, maxStates: Infinity });
     const now = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
     const isWild = (c) => c.type === CARD_TYPES.WILD_LOCATION || c.type === CARD_TYPES.WILD_INDUSTRY;
@@ -222,5 +227,5 @@ const AIPlanner = (() => {
         return { action: r.move.type, move: r.move, plan: r.plan, planStats: { states: r.states, ms: r.ms, timedOut: r.timedOut } };
     }
 
-    return { chooseAction, plan, positionValue: positionValueOf, PRODUCTION, DEFAULTS };
+    return { chooseAction, plan, positionValue: positionValueOf, PRODUCTION, THREE_ACTION, DEFAULTS };
 })();

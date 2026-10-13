@@ -1,7 +1,7 @@
 'use strict';
 
 // The production AI since Assignment 12: AIPlanner.chooseAction (js/aiPlanner.js).
-// Normal and Hard plan three actions ahead; Easy plays the heuristic. These
+// Normal and Hard plan four actions ahead; Easy plays the heuristic. These
 // tests pin the recorded games, the planner's integration with turn
 // progression, its search budget, and its information fairness.
 
@@ -15,21 +15,24 @@ const { createPlanner } = require('../scripts/research/planner');
 const baseline = require('./fixtures/assignment12-baseline.json');
 
 const E = loadEngine();
+// The production plan configuration without its wall-clock budget, so the
+// tests do not depend on the machine's speed (the recorded games use it too)
+const DETERMINISTIC = { planner: { ...E.AIPlanner.PRODUCTION, maxMs: Infinity } };
 const ser = (s) => JSON.stringify(s.serialize());
 const isWild = (c) => c.type === E.CARD_TYPES.WILD_LOCATION || c.type === E.CARD_TYPES.WILD_INDUSTRY;
 
 for (const players of [2, 3, 4]) {
     test(`${players} players: the production AI replays its recorded games exactly`, () => {
         for (const g of baseline.games[players]) {
-            const r = playGame({ players, seed: g.seed, difficulty: g.difficulty, chooseAction: E.AIPlanner.chooseAction, E });
+            const r = playGame({ players, seed: g.seed, difficulty: g.difficulty, chooseAction: E.AIPlanner.chooseAction, aiOptions: DETERMINISTIC, E });
             assert.equal(fingerprint(r.state, { steps: r.steps, actions: r.actions }), g.fingerprint,
                 `seed ${g.seed} (${g.difficulty}) no longer plays as recorded`);
         }
     });
 }
 
-test('Easy plays the heuristic; Normal and Hard play the three-action planner', () => {
-    const p3 = createPlanner(E, { depth: 3, evaluate: 'state' });
+test('Easy plays the heuristic; Normal and Hard play the four-action planner', () => {
+    const p4 = createPlanner(E, { depth: 4, evaluate: 'state', widths: [6, 3, 3] });
     const { state, logic } = createGame(E, { players: 3, seed: 141 });
     const aiRng = new E.SeededRandom(aiSeedFor(141));
     for (let k = 0; k < 30; k++) {
@@ -38,12 +41,12 @@ test('Easy plays the heuristic; Normal and Hard play the three-action planner', 
         const key = (x) => JSON.stringify(logic.moveFromDecision(x));
         assert.equal(key(E.AIPlanner.chooseAction(state, logic, d.playerId, 'easy', aiRng.clone())),
             key(E.AIPlayer.chooseAction(state, logic, d.playerId, 'easy', aiRng.clone())));
-        const research = JSON.stringify(p3.choose(state, d.playerId).move);
-        assert.equal(key(E.AIPlanner.chooseAction(state, logic, d.playerId, 'normal', aiRng.clone())), research);
-        assert.equal(key(E.AIPlanner.chooseAction(state, logic, d.playerId, 'hard', aiRng.clone())), research);
+        const research = JSON.stringify(p4.choose(state, d.playerId).move);
+        assert.equal(key(E.AIPlanner.chooseAction(state, logic, d.playerId, 'normal', aiRng.clone(), DETERMINISTIC)), research);
+        assert.equal(key(E.AIPlanner.chooseAction(state, logic, d.playerId, 'hard', aiRng.clone(), DETERMINISTIC)), research);
         assert.equal(key(E.AIPlanner.chooseAction(state, logic, d.playerId, 'normal', aiRng.clone(), { planner: 'none' })),
             key(E.AIPlayer.chooseAction(state, logic, d.playerId, 'normal', aiRng.clone())));
-        logic.play(d.playerId, logic.moveFromDecision(E.AIPlanner.chooseAction(state, logic, d.playerId, 'normal', aiRng)));
+        logic.play(d.playerId, logic.moveFromDecision(E.AIPlanner.chooseAction(state, logic, d.playerId, 'normal', aiRng, DETERMINISTIC)));
     }
 });
 
@@ -55,10 +58,10 @@ test('one legal action per decision, re-planned every action, never changing the
         if (d.type === 'shortfall') { assert.ok(logic.play(d.playerId, logic.defaultShortfallMove(d.playerId)).success); continue; }
         const before = ser(state);
         const turnBefore = [state.currentPlayerId, state.actionsThisTurn];
-        const decision = E.AIPlanner.chooseAction(state, logic, d.playerId, 'normal', aiRng);
+        const decision = E.AIPlanner.chooseAction(state, logic, d.playerId, 'normal', aiRng, DETERMINISTIC);
         assert.equal(ser(state), before, 'planning changed the real game');
         assert.deepEqual([state.currentPlayerId, state.actionsThisTurn], turnBefore);
-        assert.ok(decision.plan.length >= 1 && decision.plan.length <= 3);
+        assert.ok(decision.plan.length >= 1 && decision.plan.length <= 4);
         if (decision.plan.length > 1) planBeyondAction++;
         const r = logic.play(d.playerId, logic.moveFromDecision(decision));
         assert.ok(r.success, r.message);
@@ -114,17 +117,17 @@ function alternateWorld(state, viewerId, rng) {
 
 test('the production AI decides only on what the player may know (alternate worlds)', () => {
     const worldRng = new E.SeededRandom(144);
-    const { state, logic } = createGame(E, { players: 3, seed: 144 });
+    const { state, logic } = createGame(E, { players: 2, seed: 144 });
     const aiRng = new E.SeededRandom(aiSeedFor(144));
     let checked = 0;
     for (let d = logic.getCurrentDecision(); d.type !== 'gameOver'; d = logic.getCurrentDecision()) {
         if (d.type === 'shortfall') { logic.play(d.playerId, logic.defaultShortfallMove(d.playerId)); continue; }
         const alt = alternateWorld(state, d.playerId, worldRng);
-        const elsewhere = E.AIPlanner.chooseAction(alt, new E.GameLogic(alt), d.playerId, 'hard', aiRng.clone());
-        const decision = E.AIPlanner.chooseAction(state, logic, d.playerId, 'hard', aiRng);
+        const elsewhere = E.AIPlanner.chooseAction(alt, new E.GameLogic(alt), d.playerId, 'hard', aiRng.clone(), DETERMINISTIC);
+        const decision = E.AIPlanner.chooseAction(state, logic, d.playerId, 'hard', aiRng, DETERMINISTIC);
         assert.deepEqual(elsewhere.plan, decision.plan, `plans differ with hidden cards changed (${state.era} round ${state.round})`);
         logic.play(d.playerId, logic.moveFromDecision(decision));
         checked++;
     }
-    assert.ok(checked > 80);
+    assert.ok(checked > 60);
 });

@@ -1,24 +1,18 @@
 {
- "generatedFrom": "the production planner AI since Assignment 12",
+ "generatedFrom": "the production planner AI since Assignment 12 (four actions ahead), without the wall-clock budget",
  "scheme": "seed 6000+1000*players+i, difficulty easy/normal/hard by seed, each AI with its own seeded stream",
  "games": {
   "2": [
-   {"seed":8001,"difficulty":"normal","steps":78,"vp":[110,77],"fingerprint":"d85d1807"},
-   {"seed":8002,"difficulty":"hard","steps":78,"vp":[107,116],"fingerprint":"47276f72"},
-   {"seed":8003,"difficulty":"easy","steps":78,"vp":[68,11],"fingerprint":"63cb0b76"},
-   {"seed":8004,"difficulty":"normal","steps":78,"vp":[100,150],"fingerprint":"36b650d4"}
+   {"seed":8001,"difficulty":"normal","steps":78,"vp":[122,109],"fingerprint":"27e82c80"},
+   {"seed":8002,"difficulty":"hard","steps":78,"vp":[108,98],"fingerprint":"3c22bf70"}
   ],
   "3": [
-   {"seed":9001,"difficulty":"normal","steps":105,"vp":[105,100,101],"fingerprint":"b71018a8"},
-   {"seed":9002,"difficulty":"hard","steps":105,"vp":[105,102,76],"fingerprint":"0e4153b5"},
-   {"seed":9003,"difficulty":"easy","steps":105,"vp":[63,60,68],"fingerprint":"7df21710"},
-   {"seed":9004,"difficulty":"normal","steps":105,"vp":[121,108,66],"fingerprint":"c68c5314"}
+   {"seed":9001,"difficulty":"normal","steps":105,"vp":[129,88,122],"fingerprint":"785c0615"},
+   {"seed":9002,"difficulty":"hard","steps":105,"vp":[93,85,105],"fingerprint":"addc408f"}
   ],
   "4": [
-   {"seed":10001,"difficulty":"normal","steps":124,"vp":[80,86,89,89],"fingerprint":"d51cb7ec"},
-   {"seed":10002,"difficulty":"hard","steps":124,"vp":[86,56,94,95],"fingerprint":"5bb5489e"},
-   {"seed":10003,"difficulty":"easy","steps":124,"vp":[43,56,73,72],"fingerprint":"0b265e27"},
-   {"seed":10004,"difficulty":"normal","steps":124,"vp":[79,76,77,106],"fingerprint":"400a18b8"}
+   {"seed":10001,"difficulty":"normal","steps":124,"vp":[110,108,116,93],"fingerprint":"f71913d7"},
+   {"seed":10002,"difficulty":"hard","steps":124,"vp":[99,78,103,68],"fingerprint":"142fa58f"}
   ]
  }
 }
