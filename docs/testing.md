@@ -35,7 +35,8 @@ so any gameplay code that bypasses the game's seeded generator fails the suite.
 | `ai-overbuild.test.js` | The Assignment 8 AI (`AIPlayer.LEGACY_A8`) replays 30 recorded games exactly (`fixtures/assignment8-baseline.json`). The overbuild variants re-score only own-tile overbuilds, in the intended direction. The production default is `opportunity` and `LEGACY_A6` is `a6`. The variants play legal, pure and reproducible games |
 | `ai-invest.test.js` | The Assignment 9 AI (`AIPlayer.LEGACY_A9`) replays 30 recorded games exactly (`fixtures/assignment9-baseline.json`). The development and selling variants each change only their own valuation, in the intended direction. `LEGACY_A8` is `sell: 'a8'`. The variants play legal, pure and reproducible games |
 | `ai-planner.test.js` | The experimental planner (`scripts/research/planner.js`) plays legal moves, never changes the real game, is reproducible, and plans identically when hidden cards are reshuffled. `explain` never changes a production decision |
-| `ai-close.test.js` | The production AI replays 30 recorded games exactly (`fixtures/assignment10-baseline.json`). The defaults are `network: 'double'` and `develop: 'horizon'`, and `LEGACY_A9` is single links and `develop: 'a8'`. Double links appear only in the Rail Era and are legal; the card, source and shortfall variants do what they claim; a farm-brewery shortfall game replays. Every variant plays legal, pure and reproducible games |
+| `ai-planner-production.test.js` | The production AI (`AIPlanner.chooseAction`) replays its recorded games exactly (`fixtures/assignment12-baseline.json`). Easy plays the heuristic, and Normal and Hard the three-action planner. Each decision returns one legal action and leaves the real game and the turn untouched. An exhausted search budget still gives a legal move, and a state budget is deterministic. Plans are identical when hidden cards are reshuffled |
+| `ai-close.test.js` | The heuristic AI of Assignment 10 replays 30 recorded games exactly (`fixtures/assignment10-baseline.json`). The defaults are `network: 'double'` and `develop: 'horizon'`, and `LEGACY_A9` is single links and `develop: 'a8'`. Double links appear only in the Rail Era and are legal; the card, source and shortfall variants do what they claim; a farm-brewery shortfall game replays. Every variant plays legal, pure and reproducible games |
 | `ai-rounds.test.js` | `getRoundsRemaining` matches the round ends actually still to come at every decision of complete 2–4 player games, in both eras and across the era transition. The AI uses it, and the legacy baseline keeps the old estimate |
 
 `BRASS_SIM_GAMES=100 node --test test/*.test.js` raises the number of
@@ -55,12 +56,13 @@ complete games the suite plays per player count (default 10).
 | `test/fixtures/assignment6-baseline.json` | 30 games recorded from the AI of Assignments 6–7 (`AIPlayer.LEGACY_A6`) |
 | `test/fixtures/assignment8-baseline.json` | 30 games recorded from the AI of Assignment 8 (`AIPlayer.LEGACY_A8`) |
 | `test/fixtures/assignment9-baseline.json` | 30 games recorded from the AI of Assignment 9 (`AIPlayer.LEGACY_A9`) |
-| `test/fixtures/assignment10-baseline.json` | 30 games recorded from the production AI since Assignment 10. Re-record a fixture (`scripts/research/record-ai-baseline.js --preset current\|a9\|a8\|a6`) only for an intended AI change |
+| `test/fixtures/assignment10-baseline.json` | 30 games recorded from the heuristic AI of Assignment 10 (`AIPlayer.chooseAction`) |
+| `test/fixtures/assignment12-baseline.json` | 12 games recorded from the production AI since Assignment 12 (`AIPlanner.chooseAction`). Re-record a fixture (`scripts/research/record-ai-baseline.js --preset current\|a10\|a9\|a8\|a6`) only for an intended AI change |
 
 ## Simulation
 
 ```
-node scripts/simulate.js [--games 100] [--players 2,3,4] [--first 1] [--no-a1] [--random 20] [--mixed 30]
+node scripts/simulate.js [--games 100] [--players 2,3,4] [--first 1] [--no-a1] [--random 20] [--mixed 30] [--planner 2]
 ```
 
 For each player count, the script plays:
@@ -68,6 +70,7 @@ For each player count, the script plays:
 - **`--games` AI games** (seeds `1000 × players + i`), with the difficulty rotating easy, normal and hard by seed. Every game is cloned and saved to JSON part-way through, and the original, the clone and the restored save must finish identically. Unless `--no-a1` is given, the legacy AI baseline (`AIPlayer.LEGACY_A5`) replays each game that has a recorded counterpart (seeds 1–100), and the result is compared with the Assignment 1 baseline.
 - **`--mixed` games** with a different difficulty at each seat (easy, normal, hard, normal).
 - **`--random` games** choosing at random among every legal move, with all choices expanded and random income-shortfall decisions.
+- **`--planner` games** with the production AI (`AIPlanner.chooseAction`; seats easy, normal, hard, normal), reporting the planner's decision times.
 
 Every game is driven only through `getCurrentDecision` / `play` and is
 reported as a problem if:
