@@ -40,7 +40,7 @@ rules question was settled.
 - **No software licence.** Neither this fork nor the upstream repository has a licence file, so the default copyright rules apply. A licence can only be added by, or with the agreement of, the copyright holders, starting with the upstream author.
 - **Artwork copyright.** The bundled board, card, tile and player-mat art under `assets/` is the publisher's copyright, inherited from upstream. Anyone redistributing the project should consider replacing it ([`board-artwork.md`](board-artwork.md)).
 - **No `package.json`.** The project has no dependencies, so there is no `npm test`. The commands are documented in [`testing.md`](testing.md) and run in CI.
-- **Cache-busting query strings.** `index.html` loads scripts with `?v=4`. Bump the number when a change must reach browsers that cached the old files.
+- **Cache-busting query strings.** `index.html` loads scripts with `?v=5`. Bump the number when a change must reach browsers that cached the old files.
 
 ## Future work
 

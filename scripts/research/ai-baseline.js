@@ -12,6 +12,9 @@
 //             with the detailed per-decision statistics.
 //   threeway  [--levels easy,normal,hard]  3 players, one seat per level,
 //             all six seatings.
+//   mixed     [--levels a,b,c(,d)]  One seat per policy (3 or 4 players: the
+//             number of policies), every cyclic rotation of the seats on
+//             every seed (Assignment 12; summarise with ai-mixed.js).
 // Policies: easy, normal, hard (the current AI); <level>-a5 (the Assignment 5
 // baseline), <level>-fairinfo and <level>-rounds (one correction each);
 // hard-blind and hard-fair (the baseline Hard shown no / resampled opponent
@@ -98,8 +101,15 @@ for (const players of PLAYERS) {
         for (let i = 1; i <= SEEDS; i++) {
             for (const seats of arrangements(LEVELS.slice(0, 3))) run('threeway', 3, seedFor(3, i), seats, false);
         }
+    } else if (experiment === 'mixed') {
+        if (players !== LEVELS.length) continue;
+        for (let i = 1; i <= SEEDS; i++) {
+            for (let r = 0; r < players; r++) {
+                run('mixed', players, seedFor(players, i), LEVELS.map((_, k) => LEVELS[(k + r) % players]), false);
+            }
+        }
     } else {
-        console.error('usage: ai-baseline.js matchups|mirror|threeway [--players 2,3,4] [--seeds N] [--out file]');
+        console.error('usage: ai-baseline.js matchups|mirror|threeway|mixed [--players 2,3,4] [--seeds N] [--out file]');
         process.exit(2);
     }
     console.log(`${experiment} ${players}p: ${rows.filter(r => r.players === players).length} games in ${((Date.now() - t0) / 1000).toFixed(1)}s`);

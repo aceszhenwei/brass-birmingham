@@ -21,7 +21,7 @@ const vm = require('node:vm');
 
 const JS_DIR = path.join(__dirname, '..', '..', 'js');
 
-const ENGINE_FILES = ['gameData.js', 'random.js', 'gameState.js', 'gameLogic.js', 'moves.js', 'progression.js', 'aiPlayer.js'];
+const ENGINE_FILES = ['gameData.js', 'random.js', 'gameState.js', 'gameLogic.js', 'moves.js', 'progression.js', 'aiPlayer.js', 'aiPlanner.js'];
 
 // Small, fast, well-distributed 32-bit PRNG
 function mulberry32(seed) {

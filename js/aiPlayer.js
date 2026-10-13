@@ -284,13 +284,13 @@ const AIPlayer = (() => {
 
         let best = null;
         let bestScore = -Infinity;
-        for (const cand of targets) {
-            const score = scoreBuildCandidate(state, logic, playerId, cand);
-            if (score > bestScore) {
-                bestScore = score;
+        const scores = targets.map(cand => scoreBuildCandidate(state, logic, playerId, cand));
+        targets.forEach((cand, i) => {
+            if (scores[i] > bestScore) {
+                bestScore = scores[i];
                 best = cand;
             }
-        }
+        });
         if (!best) return null;
 
         const player = state.players[playerId];
@@ -307,10 +307,10 @@ const AIPlayer = (() => {
         // Research diagnostics: every build target's score, and the tile it
         // would replace (options.explain)
         if (options.explain) {
-            result.builds = targets.map(t => {
+            result.builds = targets.map((t, i) => {
                 const e = existingTile(state, t);
                 return { cityId: t.cityId, slotIndex: t.slotIndex, industryType: t.industryType, level: t.tileData.level,
-                    cost: t.cost.total, score: scoreBuildCandidate(state, logic, playerId, t),
+                    cost: t.cost.total, score: scores[i],
                     replaces: e ? { own: e.playerId === playerId, level: e.tileData.level, flipped: e.flipped, cubes: e.resourceCubes || 0 } : null };
             });
         }
@@ -374,13 +374,13 @@ const AIPlayer = (() => {
 
         let best = null;
         let bestScore = -Infinity;
-        for (const cand of targets) {
-            const score = scoreNetworkCandidate(state, logic, playerId, cand);
-            if (score > bestScore) {
-                bestScore = score;
+        const scores = targets.map(cand => scoreNetworkCandidate(state, logic, playerId, cand));
+        targets.forEach((cand, i) => {
+            if (scores[i] > bestScore) {
+                bestScore = scores[i];
                 best = cand;
             }
-        }
+        });
         if (!best) return null;
 
         const player = state.players[playerId];
@@ -389,7 +389,7 @@ const AIPlayer = (() => {
 
         // Research diagnostics: every single-link target's score (options.explain)
         const networks = options.explain
-            ? targets.map(t => ({ connectionId: t.connectionId, score: scoreNetworkCandidate(state, logic, playerId, t) })) : undefined;
+            ? targets.map((t, i) => ({ connectionId: t.connectionId, score: scores[i] })) : undefined;
         const double = options.network === 'double' ? bestDoubleRail(state, logic, playerId, targets, cardIndex) : null;
         if (double && double.score > bestScore) {
             return {
