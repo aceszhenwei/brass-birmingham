@@ -76,7 +76,7 @@ CI runs the same commands on every pull request; see
 - Both eras (Canal and Rail) for 2–4 players, with all seven actions: Build, Network, Develop, Sell, Loan, Scout and Pass.
 - Automatic markets, income, turn order, era transitions and scoring.
 - Choices wherever the rules give one, and legal sourcing otherwise.
-- AI opponents at Easy, Normal and Hard.
+- AI opponents: heuristic Easy, and four-action planning at Normal and Hard ([planning study](docs/research/ai-planning-a12.md)).
 - Select cards or map targets to start Build and Network; review the target, cost and discard before confirming.
 - Live coal/iron markets, round spending and provisional next-round order on the board; visible merchant demand and beer availability.
 - Player-coloured links and industries, current resource counts, compact expandable sidebar details, and an expanded industry inventory.
@@ -98,7 +98,7 @@ implemented.
 
 - Hotseat only, and hands are not hidden between human players.
 - No save/load controls; undo/reset is limited to the active human turn before it ends.
-- AI difficulties remain close in strength; the experimental multi-action planner is not enabled in the game.
+- Normal and Hard use the same four-action planner; Easy uses the heuristic AI. Planner decisions can pause slower devices.
 - No software licence (see below).
 
 The full list is in [`docs/known-limitations.md`](docs/known-limitations.md).

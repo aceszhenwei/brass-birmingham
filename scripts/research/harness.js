@@ -174,6 +174,11 @@ const PLANNER_CONFIGS = {
     // Added after exploration, when depth 3 exceeded the time budget: a
     // bounded depth-3 search (4 first-level and 2 second-level candidates)
     'p3-state-b': { depth: 3, evaluate: 'state', width: 4, width2: 2 },
+    // Assignment 12: four-action planning. Full: 6, 3 and 3 candidates at the
+    // first three levels; bounded: 4, 2, 2 (b) and 6, 3, 1 (n, narrow third level)
+    'p4-state': { depth: 4, evaluate: 'state', widths: [6, 3, 3] },
+    'p4-state-b': { depth: 4, evaluate: 'state', widths: [4, 2, 2] },
+    'p4-state-n': { depth: 4, evaluate: 'state', widths: [6, 3, 1] },
 };
 function plannerPolicy(level, name, cfg) {
     return (ctx, d) => {

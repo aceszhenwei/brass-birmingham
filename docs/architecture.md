@@ -15,7 +15,7 @@ context, so the browser and the tests run identical code.
 | Rules queries | `gameLogic.js` | Legal targets, costs, resource sources, and `getDisabledReason()` |
 | Moves | `moves.js` | The move format, validation, and player choices |
 | Progression | `progression.js` | Who decides next, and every automatic step |
-| Consumers | `uiManager.js`, `aiPlayer.js`, `test/helpers/headless.js`, `scripts/simulate.js` | Present the game and choose moves |
+| Consumers | `uiManager.js`, `aiPlayer.js`, `aiPlanner.js`, `test/helpers/headless.js`, `scripts/simulate.js` | Present the game and choose moves |
 
 The engine (data through progression) has no DOM code. The UI and the AI only
 choose moves and present what happened; neither advances the game. See
@@ -33,7 +33,8 @@ choose moves and present what happened; neither advances the game. See
 | `js/gameLogic.js` | Rules queries (targets, costs, sources), the older `execute*` wrappers, and `getDisabledReason()` |
 | `js/moves.js` | The move engine: move format, planners and choice points, `getLegalMoves` / `applyMove` / `getNextChoice` ([`moves.md`](moves.md)) |
 | `js/progression.js` | Game progression: `getCurrentDecision` / `play` / `runGame` ([`engine.md`](engine.md)) |
-| `js/aiPlayer.js` | Heuristic AI opponent (Easy / Normal / Hard). It decides on the player's observation (`getObservation`), never the full state. It charges an overbuild of its own tile for the replaced tile's value, values a sellable tile that cannot be sold yet with its measured sale probability, builds double rail links, and stops developing in the game's last two rounds. `AIPlayer.LEGACY_A5`, `LEGACY_A6`, `LEGACY_A8` and `LEGACY_A9` reproduce earlier AIs for research |
+| `js/aiPlayer.js` | Heuristic AI opponent (Easy / Normal / Hard). It decides on the player's observation (`getObservation`), never the full state. It charges an overbuild of its own tile for the replaced tile's value, values a sellable tile that cannot be sold yet with its measured sale probability, builds double rail links, and stops developing in the game's last two rounds. `AIPlayer.LEGACY_A5`, `LEGACY_A6`, `LEGACY_A8` and `LEGACY_A9` reproduce earlier AIs for research. Since Assignment 12 it is the Easy AI, and the planner's candidate generator |
+| `js/aiPlanner.js` | The production AI since Assignment 12 (`AIPlanner.chooseAction`, called by the UI): at Normal and Hard it plans several of the player's own actions ahead on clones of the player's observation, with a search budget ([`research/ai-planning-a12.md`](research/ai-planning-a12.md)). Easy plays the heuristic |
 | `js/industryIcons.js` | Engraved industry illustrations shared by the board and the hand cards |
 | `js/actionIcons.js` | Action button icons |
 | `js/boardAssets.js` | The bundled board and component artwork, and the measured board layout ([`board-artwork.md`](board-artwork.md)) |

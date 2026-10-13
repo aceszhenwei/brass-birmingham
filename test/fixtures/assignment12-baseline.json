@@ -1,0 +1,18 @@
+{
+ "generatedFrom": "the production planner AI since Assignment 12 (four actions ahead), without the wall-clock budget",
+ "scheme": "seed 6000+1000*players+i, difficulty easy/normal/hard by seed, each AI with its own seeded stream",
+ "games": {
+  "2": [
+   {"seed":8001,"difficulty":"normal","steps":78,"vp":[122,109],"fingerprint":"27e82c80"},
+   {"seed":8002,"difficulty":"hard","steps":78,"vp":[108,98],"fingerprint":"3c22bf70"}
+  ],
+  "3": [
+   {"seed":9001,"difficulty":"normal","steps":105,"vp":[129,88,122],"fingerprint":"785c0615"},
+   {"seed":9002,"difficulty":"hard","steps":105,"vp":[93,85,105],"fingerprint":"addc408f"}
+  ],
+  "4": [
+   {"seed":10001,"difficulty":"normal","steps":124,"vp":[110,108,116,93],"fingerprint":"f71913d7"},
+   {"seed":10002,"difficulty":"hard","steps":124,"vp":[99,78,103,68],"fingerprint":"142fa58f"}
+  ]
+ }
+}

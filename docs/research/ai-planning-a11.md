@@ -367,6 +367,11 @@ yet.
 Everything is deterministic with Node.js 22+. Raw results go to the
 git-ignored `research-a11/` folder.
 
+Since Assignment 12 the planner lives in `js/aiPlanner.js`, and
+`scripts/research/planner.js` wraps it. The moved planner makes the same plans
+with the same values (checked decision by decision), so the commands below
+reproduce this report.
+
 ```
 # Measurements (about 1-10 min each)
 node scripts/research/ai-plan.js search  --players 3 --seeds 10      # and 2, 4

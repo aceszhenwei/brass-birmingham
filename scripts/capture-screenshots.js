@@ -50,7 +50,8 @@ const url = process.env.BRASS_CAPTURE_URL || 'http://127.0.0.1:8080';
     await page.evaluate(() => uiManager.onCardClicked(0));
     await capture('hand_actions');
     await page.evaluate(() => uiManager.cancelAction());
-    // Advance using the current AI policy, with human seats so overlays wait
+    // Advance using a fixed heuristic sample policy (not live Normal/Hard),
+    // with human seats so overlays wait
     // for explicit Continue. This does not patch or bypass engine rules.
     const advance = async (stage) => page.evaluate(stage => {
         let steps = 0;

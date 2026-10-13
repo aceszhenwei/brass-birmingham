@@ -1426,7 +1426,9 @@ class UIManager {
 
         let decision;
         try {
-            decision = AIPlayer.chooseAction(this.state, this.logic, playerId, player.aiDifficulty, this.aiRng);
+            // The production AI: the planner (js/aiPlanner.js) at Normal and
+            // Hard, the heuristic at Easy
+            decision = AIPlanner.chooseAction(this.state, this.logic, playerId, player.aiDifficulty, this.aiRng);
         } catch (err) {
             this.recoverAITurn(err && err.message ? err.message : String(err));
             return;
