@@ -179,6 +179,11 @@ const PLANNER_CONFIGS = {
     'p4-state': { depth: 4, evaluate: 'state', widths: [6, 3, 3] },
     'p4-state-b': { depth: 4, evaluate: 'state', widths: [4, 2, 2] },
     'p4-state-n': { depth: 4, evaluate: 'state', widths: [6, 3, 1] },
+    // Assignment 14 candidates on the production four-action planner: A, the
+    // end-of-game cash valuation; B, the scoring-link candidate; C, both
+    'p4-a': { depth: 4, evaluate: 'state', widths: [6, 3, 3], endgame: 'tiebreak' },
+    'p4-b': { depth: 4, evaluate: 'state', widths: [6, 3, 3], scoringLinks: true },
+    'p4-c': { depth: 4, evaluate: 'state', widths: [6, 3, 3], endgame: 'tiebreak', scoringLinks: true },
 };
 function plannerPolicy(level, name, cfg) {
     return (ctx, d) => {
