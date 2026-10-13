@@ -2,39 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadEngine } = require('./helpers/engine');
 
-// Record SVG attributes and descendants while exercising the real renderer
-// and industry icons, without a browser dependency.
-function element(tag) {
-    return {
-        tag, attrs: {}, children: [], textContent: '',
-        setAttribute(key, value) { this.attrs[key] = String(value); },
-        appendChild(child) { this.children.push(child); return child; },
-    };
-}
-function descendants(node) {
-    return [node, ...node.children.flatMap(descendants)];
-}
-function setup(numPlayers = 4, artwork = true) {
-    const E = loadEngine({
-        extraFiles: ['industryIcons.js', 'boardAssets.js', 'boardRenderer.js'],
-        globals: {
-            document: { createElementNS: (_, tag) => element(tag) },
-            location: { search: '' },
-        },
-    });
-    const svg = element('svg');
-    const renderer = new E.BoardRenderer(svg);
-    renderer.state = new E.GameState(numPlayers, ['A', 'B', 'C', 'D'].slice(0, numPlayers), [], { seed: 91 });
-    if (artwork) {
-        renderer.assetURL = 'assets/board.jpg';
-        renderer.layout = E.BoardAssets.OFFICIAL_LAYOUT;
-        renderer.citySlotSize = 39;
-        renderer.citySlotH = 36;
-    }
-    return { E, svg, renderer };
-}
+const { descendants, setup } = require('./helpers/svg');
 
 for (const buys of ['cottonMill', 'manufacturer', 'pottery', 'any', 'blank']) {
     test(`artwork merchant displays ${buys} in each Oxford space`, () => {
@@ -52,14 +21,16 @@ for (const buys of ['cottonMill', 'manufacturer', 'pottery', 'any', 'blank']) {
         assert.notEqual(goods[0].attrs.transform, goods[1].attrs.transform);
         assert.ok(goods.every(n => descendants(n).some(c => c.tag === 'text' && c.textContent)));
         assert.ok(goods.every(n => descendants(n).some(c => c.tag === 'title' && /Buys|No demand/.test(c.textContent))));
-        assert.equal(oxford.children.filter(n => n.tag === 'ellipse').length, buys === 'blank' ? 0 : 2);
+        const beer = oxford.children.filter(n => n.attrs.class === 'merchant-beer');
+        assert.deepEqual(beer.map(n => n.attrs['data-beer']), [buys === 'blank' ? 'none' : 'available', 'consumed']);
         // Spending beer does not remove the demand tile on the next redraw.
         renderer.state.merchantTiles[0].hasBeer = false;
         svg.children = [];
         renderer.drawMerchants();
         const redrawn = descendants(svg).find(n => n.attrs['data-merchant'] === 'oxford');
         assert.equal(redrawn.children.filter(n => n.attrs.class === 'merchant-goods').length, 2);
-        assert.equal(redrawn.children.filter(n => n.tag === 'ellipse').length, 0);
+        assert.deepEqual(redrawn.children.filter(n => n.attrs.class === 'merchant-beer').map(n => n.attrs['data-beer']),
+            [buys === 'blank' ? 'none' : 'consumed', 'consumed']);
     });
 }
 

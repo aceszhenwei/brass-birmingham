@@ -239,6 +239,13 @@ class GameState {
         this.moneySpentThisRound[playerId] = (this.moneySpentThisRound[playerId] || 0) + amount;
     }
 
+    // A projection during the round; also used when committing the new order.
+    // Sorting a copy preserves the current order and stable ties.
+    getNextRoundTurnOrder() {
+        return [...this.turnOrder].sort((a, b) =>
+            (this.moneySpentThisRound[a] || 0) - (this.moneySpentThisRound[b] || 0));
+    }
+
     // ========================================================================
     // Current player helpers
     // ========================================================================
@@ -703,12 +710,7 @@ class GameState {
 
         // Determine turn order: player who spent LEAST goes first next round
         // Ties broken by current turn order (earlier player goes first)
-        this.turnOrder.sort((a, b) => {
-            const spentA = this.moneySpentThisRound[a] || 0;
-            const spentB = this.moneySpentThisRound[b] || 0;
-            if (spentA !== spentB) return spentA - spentB; // Less spending = earlier turn
-            return 0; // Maintain current relative order for ties
-        });
+        this.turnOrder = this.getNextRoundTurnOrder();
 
         // Reset spending tracker for next round
         this.moneySpentThisRound = {};

@@ -2272,3 +2272,21 @@ h1, h2, h3 {
         min-width: 0;
     }
 }
+
+/* Public round spending and provisional order stay readable on small screens. */
+#turn-order-panel {
+    padding: 8px 10px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border-dark);
+    border-radius: var(--border-radius);
+    grid-column: 1 / -1;
+}
+.turn-order-heading { font-size: 11px; color: var(--text-muted); margin: 6px 0 3px; }
+.turn-order-list { margin: 0; padding-left: 22px; font-size: 11px; }
+.turn-order-list li { padding: 3px 5px; border-left: 3px solid; overflow-wrap: anywhere; }
+.turn-order-list .current-turn { background: rgba(201,168,76,0.15); color: #fff2ae; }
+.turn-order-note { margin: 6px 0 0; font-size: 10px; line-height: 1.4; color: var(--text-muted); }
+.market-space { height: 32px; }
+.market-space .cube-svg { width: 18px; height: 18px; align-self: flex-start; margin-top: 2px; }
+.market-price-label { position: absolute; bottom: 1px; font-size: 8px; color: #f5ecdb; }
+.market-space.next-purchase { outline: 2px solid #fff2ae; outline-offset: 1px; }
