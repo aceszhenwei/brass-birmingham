@@ -13,6 +13,7 @@ class UIManager {
         this.actionStep = 0; // Multi-step action tracking
         this.pendingData = {}; // Data accumulated during multi-step actions
         this.gameLog = []; // Game log entries
+        this.undoHistory = [];
         this.turnPlayerId = null; // whose turn was last announced (turn transitions)
     }
 
@@ -41,6 +42,11 @@ class UIManager {
         document.getElementById('expand-industries').addEventListener('click', () => this.showIndustries());
         document.getElementById('industries-close').addEventListener('click', () => document.getElementById('industries-dialog').close());
         document.getElementById('industries-player').addEventListener('change', () => this.renderIndustrySheet());
+        document.getElementById('game-board').addEventListener('keydown', e => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.onBoardClick(e); }
+        });
+        document.getElementById('undo-action').onclick = () => this.restoreTurn(false);
+        document.getElementById('reset-turn').onclick = () => this.restoreTurn(true);
         // Action buttons
         document.querySelectorAll('.action-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -88,6 +94,7 @@ class UIManager {
     // ========================================================================
 
     refresh() {
+        this.updateUndoControls();
         this.updateTopBar();
         this.updatePlayerPanels();
         this.updateTurnOrder();
@@ -96,6 +103,7 @@ class UIManager {
         this.updatePlayerMat();
         this.updateMarkets();
         this.updatePhaseBar();
+        this.updateActionDetails();
         this.renderer.fullUpdate(this.state);
     }
 
@@ -126,20 +134,22 @@ class UIManager {
 
     updatePlayerPanels() {
         const container = document.getElementById('player-panels');
+        const expanded = new Set([...container.children].filter(p => p.open).map(p => p.dataset.player));
         container.innerHTML = '';
 
         for (const player of this.state.players) {
             const isActive = player.id === this.state.currentPlayerId;
-            const panel = document.createElement('div');
+            const panel = document.createElement('details');
             panel.className = `player-panel${isActive ? ' active' : ''}`;
+            panel.dataset.player = String(player.id); panel.open = expanded.has(String(player.id));
             // Set the left border color via the panel itself (CSS uses border-left)
             panel.style.borderLeftColor = player.color;
 
             panel.innerHTML = `
-                <div class="player-panel-header">
+                <summary><div class="player-panel-header">
                     <span class="player-panel-name" style="color: ${player.color}">${player.name}${player.isAI ? ' <span class="ai-chip">AI</span>' : ''}</span>
                     <span class="player-panel-vp">${player.vp} <span style="font-size:10px;font-weight:400;color:var(--text-muted)">VP</span></span>
-                </div>
+                </div><div class="player-glance">£${player.money} · Income ${this.state.getIncomeLevel(player.id)} · Spent £${this.state.moneySpentThisRound[player.id] || 0}</div></summary>
                 <div class="player-panel-stats">
                     <span class="player-panel-stat" title="Money" style="color:#c9a84c">£${player.money}</span>
                     <span class="player-panel-stat" title="Income level">&#8679; ${this.state.getIncomeLevel(player.id)}</span>
@@ -176,6 +186,9 @@ class UIManager {
             container.appendChild(list);
         };
         addOrder('This round', this.state.turnOrder, true);
+        const nextOrder = this.state.getNextRoundTurnOrder();
+        document.getElementById('turn-order-glance').textContent = this.state.gameOver ? 'Turn order · game over'
+            : `Now: ${this.state.currentPlayer.name} · Next first: ${this.state.players[nextOrder[0]].name} (so far)`;
         if (!this.state.gameOver) addOrder('Next round · provisional', this.state.getNextRoundTurnOrder());
         const note = document.createElement('p');
         note.className = 'turn-order-note';
@@ -222,6 +235,11 @@ class UIManager {
             const cardEl = document.createElement('div');
             cardEl.className = 'card';
             cardEl.dataset.index = idx;
+            cardEl.setAttribute('tabindex', '0'); cardEl.setAttribute('role', 'button');
+            cardEl.setAttribute('aria-label', card.name || card.type);
+            cardEl.addEventListener('keydown', e => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.onCardClicked(idx); }
+            });
 
             // With the printed card faces supplied locally, the card IS the
             // artwork — no drawn type/icon/name layout on top of it.
@@ -535,6 +553,7 @@ class UIManager {
         const ironTrack = document.getElementById('iron-track');
         ironTrack.innerHTML = '';
         const ironPrice = this.state.getIronPrice();
+        document.getElementById('markets-glance').textContent = `Markets · Coal £${this.state.getCoalPrice()} · Iron £${ironPrice}`;
         document.getElementById('iron-current-price').textContent =
             `Next: £${ironPrice}${this.state.ironMarket === 0 ? ' (supply)' : ''}`;
 
@@ -592,12 +611,23 @@ class UIManager {
             }
         });
 
+        if (this.selectedAction === ACTIONS.BUILD || this.selectedAction === ACTIONS.NETWORK) {
+            const labels = ['Card or action', 'Choose on map', 'Review & confirm'];
+            steps.forEach((step, i) => { const label = step.querySelector('.phase-step-label'); if (label) label.textContent = labels[i]; });
+            instructionText = this.pendingData.review ? 'Review the action, then confirm'
+                : this.pendingData.secondRail ? 'Click a second highlighted rail route, or keep one link'
+                : this.actionStep > 0 ? 'Choose a card to discard; review before confirming'
+                : this.selectedCard !== null ? 'Card selected. Choose a highlighted target on the map'
+                : 'Choose a highlighted map target, or start with a card';
+        } else {
+            steps.forEach((step, i) => { const label = step.querySelector('.phase-step-label'); if (label) label.textContent = ['Choose Action', 'Select Target', 'Discard Card'][i]; });
+        }
         instruction.textContent = instructionText;
     }
 
     getTargetInstruction() {
         switch (this.selectedAction) {
-            case ACTIONS.BUILD: return 'Select what to build from the list';
+            case ACTIONS.BUILD: return 'Choose a highlighted industry slot on the map';
             case ACTIONS.NETWORK: return 'Select a connection to build';
             case ACTIONS.DEVELOP: return 'Select a tile to develop';
             case ACTIONS.SELL: return 'Select industries to sell';
@@ -685,6 +715,24 @@ class UIManager {
 
     onCardClicked(index) {
         if (this.state.currentPlayer.isAI) return;
+        if (!this.state.currentPlayer.hand[index]) return;
+        const direct = this.selectedAction === ACTIONS.BUILD || this.selectedAction === ACTIONS.NETWORK;
+        if (direct && this.actionStep > 0 && this.pendingData.move) {
+            const target = this.selectedAction === ACTIONS.BUILD
+                ? { cityId: this.pendingData.move.location, industryType: this.pendingData.move.industry } : null;
+            if (!this.logic.getValidCardsForAction(this.state.currentPlayerId, this.selectedAction, target).includes(index)) {
+                this.showToast('This card cannot pay for the selected build', 'warning'); return;
+            }
+        }
+        if (!this.selectedAction || (direct && this.actionStep === 0 && !this.pendingData.secondRail)) {
+            if (this.selectedCard === index && this.selectedAction === ACTIONS.BUILD) { this.cancelAction(); return; }
+            this.selectedCard = index;
+            if (this.selectedAction !== ACTIONS.NETWORK) this.selectedAction = ACTIONS.BUILD;
+            this.pendingData = {};
+            this.startAction(this.selectedAction);
+            this.updateActionButtons(); this.updateHand(); this.updatePhaseBar(); this.updateActionDetails();
+            return;
+        }
         if (this.selectedCard === index) {
             this.selectedCard = null;
         } else {
@@ -696,6 +744,7 @@ class UIManager {
         if (this.selectedAction && this.actionStep > 0) {
             this.processActionStep();
         }
+        this.updatePhaseBar(); this.updateActionDetails();
     }
 
     // ========================================================================
@@ -712,11 +761,12 @@ class UIManager {
         this.selectedAction = action;
         this.actionStep = 0;
         this.pendingData = {};
-        this.selectedCard = null;
+        if (action !== ACTIONS.BUILD && action !== ACTIONS.NETWORK) this.selectedCard = null;
 
         this.updateActionButtons();
         this.updatePhaseBar();
         this.startAction(action);
+        this.updateHand(); this.updateActionDetails();
     }
 
     cancelAction() {
@@ -729,6 +779,7 @@ class UIManager {
         this.updateHand();
         this.updatePhaseBar();
         this.closeModal();
+        this.updateActionDetails();
     }
 
     // ========================================================================
@@ -768,8 +819,13 @@ class UIManager {
     // ========================================================================
 
     startBuild(playerId) {
-        const targets = this.logic.getValidBuildTargets(playerId);
+        const targets = this.logic.getValidBuildTargets(playerId).filter(t => this.selectedCard === null ||
+            this.logic.getValidCardsForAction(playerId, ACTIONS.BUILD, t).includes(this.selectedCard));
         if (targets.length === 0) {
+            if (this.selectedCard !== null) {
+                this.pendingData.buildTargets = []; this.renderer.clearHighlights();
+                this.updateActionDetails(); return;
+            }
             this.showToast('No valid build targets available', 'warning');
             this.cancelAction();
             return;
@@ -781,7 +837,8 @@ class UIManager {
         // Highlight valid slots on the board
         this.renderer.highlightSlots(targets);
 
-        this.showBuildModal(playerId, targets);
+        // The map stays visible. Only choosing among industries sharing a
+        // clicked slot needs a small, local list.
     }
 
     showBuildModal(playerId, targets) {
@@ -837,31 +894,7 @@ class UIManager {
         }
 
         this.renderer.highlightConnections(targets.map(t => t.connectionId));
-
-        let html = '<div class="choice-list">';
-        for (const target of targets) {
-            const city1 = CITIES[target.cities[0]]?.name || MERCHANTS[target.cities[0]]?.name || target.cities[0];
-            const city2 = CITIES[target.cities[1]]?.name || MERCHANTS[target.cities[1]]?.name || target.cities[1];
-            html += `
-                <div class="choice-item" data-conn="${target.connectionId}">
-                    <div class="choice-item-icon">${target.type === 'canal' ? '~' : '#'}</div>
-                    <div class="choice-item-text">
-                        <div class="choice-item-name">${city1} — ${city2}</div>
-                        <div class="choice-item-detail">${target.type}</div>
-                    </div>
-                    <div class="choice-item-cost">£${target.cost}</div>
-                </div>
-            `;
-        }
-        html += '</div>';
-
-        this.showModal('Build Link', html, () => {});
-
-        document.querySelectorAll('#modal-body .choice-item').forEach(item => {
-            item.addEventListener('click', () => {
-                this.afterNetworkFirstSelection(item.dataset.conn);
-            });
-        });
+        this.pendingData.networkTargets = targets;
     }
 
     // In the Rail Era a second link may be added (£15 total, +1 coal, +1 beer
@@ -872,44 +905,15 @@ class UIManager {
         if (this.state.era === ERA.RAIL) {
             const seconds = this.logic.getValidSecondRailLinks(playerId, connectionId);
             if (seconds.length > 0) {
-                this.showSecondRailModal(connectionId, seconds);
+                this.pendingData.firstLink = connectionId;
+                this.pendingData.secondRail = seconds;
+                this.renderer.highlightConnections(seconds.map(s => s.connectionId));
+                this.closeModal(); this.updatePhaseBar(); this.updateActionDetails();
                 return;
             }
         }
 
         this.proceedWithMove({ type: ACTIONS.NETWORK, links: [connectionId] });
-    }
-
-    showSecondRailModal(firstConnId, seconds) {
-        const name = id => CITIES[id]?.name || MERCHANTS[id]?.name || id;
-
-        let html = '<p style="margin-bottom:12px;color:var(--text-secondary);font-size:13px;">' +
-            'Optionally build a second rail link — £15 total for both links, plus 1 coal per link and 1 beer from a brewery.</p>';
-        html += '<div class="choice-list">';
-        html += '<div class="choice-item" data-conn="none"><div class="choice-item-text"><div class="choice-item-name">Just one link</div><div class="choice-item-detail">£5 + 1 coal</div></div></div>';
-        for (const s of seconds) {
-            html += `
-                <div class="choice-item" data-conn="${s.connectionId}">
-                    <div class="choice-item-icon">#</div>
-                    <div class="choice-item-text">
-                        <div class="choice-item-name">${name(s.cities[0])} — ${name(s.cities[1])}</div>
-                        <div class="choice-item-detail">2nd link · +1 beer</div>
-                    </div>
-                    <div class="choice-item-cost">£${s.totalCost} total${s.totalCost > RAIL_DOUBLE_LINK_COST ? ' (incl. coal)' : ''}</div>
-                </div>
-            `;
-        }
-        html += '</div>';
-
-        this.showModal('Second Rail Link?', html, () => {});
-
-        document.querySelectorAll('#modal-body .choice-item').forEach(item => {
-            item.addEventListener('click', () => {
-                const conn2 = item.dataset.conn;
-                this.proceedWithMove({ type: ACTIONS.NETWORK,
-                    links: conn2 === 'none' ? [firstConnId] : [firstConnId, conn2] });
-            });
-        });
     }
 
     // ========================================================================
@@ -1093,6 +1097,14 @@ class UIManager {
 
         const playerId = this.state.currentPlayerId;
         const cardIndex = this.selectedCard;
+        if (this.selectedAction === ACTIONS.BUILD || this.selectedAction === ACTIONS.NETWORK) {
+            if (!this.pendingData.move) return;
+            const move = { ...this.pendingData.move, card: cardIndex };
+            const check = this.logic.resolveMove(playerId, move);
+            if (!check.ok) { this.showToast(check.message, 'warning'); return; }
+            this.proceedWithMove(move);
+            return;
+        }
 
         if (this.selectedAction === ACTIONS.SCOUT) {
             if (!this.pendingData.scoutCards) this.pendingData.scoutCards = [];
@@ -1124,8 +1136,79 @@ class UIManager {
     // Every decision — human or AI, action or shortfall — is played through
     // the engine, which also advances the game (turns, rounds, income, era
     // scoring, game end) and reports what happened as events.
+    updateUndoControls() {
+        const enabled = this.undoHistory.length > 0 && !this.state.currentPlayer.isAI
+            && this.logic.getCurrentDecision().type === 'action';
+        for (const id of ['undo-action', 'reset-turn']) document.getElementById(id).disabled = !enabled;
+    }
+
+    restoreTurn(reset) {
+        if (!this.undoHistory.length || this.state.currentPlayer.isAI
+            || this.logic.getCurrentDecision().type !== 'action') return;
+        const snapshot = reset ? this.undoHistory[0] : this.undoHistory[this.undoHistory.length - 1];
+        if (reset) this.undoHistory = []; else this.undoHistory.pop();
+        // Preserve references held by main.js, the renderer and the logic.
+        for (const key of Object.keys(this.state)) delete this.state[key];
+        Object.assign(this.state, snapshot.state.clone());
+        this.gameLog = snapshot.log.slice();
+        this.cancelAction();
+        this.closeModal();
+        this.renderLog();
+        this.refresh();
+    }
+
+    scoringBreakdown() {
+        const board = this.scoringBoard;
+        if (!board) return '';
+        const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        let html = '';
+        for (const player of board.players) {
+            html += `<details><summary>${escape(player.name)} — scoring breakdown</summary><ul>`;
+            // Isolate each component and ask the existing scoring implementation
+            // for its contribution. No scoring rules are reimplemented in UI.
+            for (const [key, link] of Object.entries(board.boardLinks)) {
+                if (link.playerId !== player.id) continue;
+                const copy = board.clone(); copy.boardLinks = { [key]: link };
+                const score = copy.calculateEraScore().find(s => s.playerId === player.id);
+                html += `<li>${escape(key)}: ${score.linkVP} link VP</li>`;
+            }
+            for (const [field, tiles] of [['boardIndustries', board.boardIndustries], ['breweryFarmTiles', board.breweryFarmTiles]]) {
+                for (const [key, tile] of Object.entries(tiles)) {
+                    if (!tile || tile.playerId !== player.id) continue;
+                    const copy = board.clone(); copy.boardIndustries = {}; copy.breweryFarmTiles = {};
+                    copy[field] = { [key]: tile };
+                    const score = copy.calculateEraScore().find(s => s.playerId === player.id);
+                    html += `<li>${escape(key)} (${escape(tile.type || 'industry')}, ${tile.flipped ? 'flipped' : 'unflipped'}): ${score.industryVP} industry VP</li>`;
+                }
+            }
+            html += '</ul></details>';
+        }
+        return html;
+    }
+
     playMove(playerId, move) {
+        const before = this.state.clone();
+        const log = this.gameLog.slice();
+        // Replay only on an independent copy to capture the board immediately
+        // before scoring, including the final action and income shortfalls.
+        let scoringBoard = null;
+        if (before.drawDeck.length === 0) {
+        const probe = before.clone();
+        const calculate = probe.calculateEraScore;
+        probe.calculateEraScore = function () {
+            scoringBoard = this.clone();
+            return calculate.call(this);
+        };
+        new GameLogic(probe).play(playerId, move);
+        }
         const result = this.logic.play(playerId, move);
+        if (result.success) {
+            this.scoringBoard = scoringBoard;
+            const sameTurn = this.state.era === before.era && this.state.round === before.round
+                && this.state.currentPlayerId === playerId && this.logic.getCurrentDecision().type === 'action';
+            if (!before.players[playerId].isAI && sameTurn) this.undoHistory.push({ state: before, log });
+            else this.undoHistory = [];
+        }
         if (result.success) {
             const msg = result.message;
             this.addLogEntry(playerId, msg.charAt(0).toLowerCase() + msg.slice(1));
@@ -1139,6 +1222,7 @@ class UIManager {
     // step. Options the engine reports are always legal and completable.
     proceedWithMove(move) {
         const playerId = this.state.currentPlayerId;
+        if ((move.type === ACTIONS.BUILD || move.type === ACTIONS.NETWORK) && this.selectedCard !== null) move = { ...move, card: this.selectedCard };
         const next = this.logic.getNextChoice(playerId, move);
         if (next) {
             this.showChoiceModal(next, value => this.proceedWithMove(withChoice(next.move, next.slot, value)));
@@ -1151,11 +1235,58 @@ class UIManager {
             return;
         }
         this.pendingData = { move: check.resolved };
+        if ((move.type === ACTIONS.BUILD || move.type === ACTIONS.NETWORK) && this.selectedCard !== null) this.pendingData.review = true;
         this.closeModal();
         this.renderer.clearHighlights();
         this.actionStep = 1;
         this.updatePhaseBar();
         this.updateHand();
+        this.updateActionDetails();
+    }
+
+    updateActionDetails() {
+        const dock = document.getElementById('action-details');
+        dock.innerHTML = '';
+        const direct = this.selectedAction === ACTIONS.BUILD || this.selectedAction === ACTIONS.NETWORK;
+        dock.classList.toggle('hidden', !direct);
+        if (!direct) return;
+        const name = id => CITIES[id]?.name || MERCHANTS[id]?.name || BREWERY_FARMS[id]?.name || id;
+        const button = (label, onClick) => {
+            const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = label;
+            btn.addEventListener('click', onClick); dock.appendChild(btn);
+        };
+        const info = document.createElement('span');
+        const move = this.pendingData.move;
+        if (this.pendingData.secondRail) {
+            const route = CONNECTIONS.find(c => c.id === this.pendingData.firstLink);
+            info.textContent = `${route.cities.map(name).join(' ↔ ')} selected. Choose a second highlighted route, or build one.`;
+            button('Keep one link', () => this.proceedWithMove({ type: ACTIONS.NETWORK, links: [this.pendingData.firstLink] }));
+        } else if (move) {
+            const label = move.type === ACTIONS.BUILD ? `${INDUSTRY_DISPLAY[move.industry].name} in ${name(move.location)}`
+                : move.links.map(id => CONNECTIONS.find(c => c.id === id).cities.map(name).join(' ↔ ')).join(' + ');
+            const resolved = this.logic.resolveMove(this.state.currentPlayerId, move, { requireCard: false });
+            info.textContent = `${label}${resolved.ok ? ` · Total £${resolved.plan.cost}` : ''}${this.selectedCard === null ? ' · Choose a discard card' : ` · Discard: ${this.state.currentPlayer.hand[this.selectedCard]?.name || 'selected card'}`}`;
+            if (this.pendingData.review && this.selectedCard !== null) button(`Confirm ${move.type === ACTIONS.BUILD ? 'build' : 'link'}`, () => this.confirmPendingMove());
+            button('Change target', () => {
+                this.pendingData = {}; this.actionStep = 0; this.closeModal();
+                this.startAction(this.selectedAction); this.updateHand(); this.updatePhaseBar(); this.updateActionDetails();
+            });
+        } else {
+            info.textContent = this.selectedAction === ACTIONS.BUILD
+                ? this.pendingData.buildTargets?.length === 0 ? 'No legal builds for this card. Choose another card or another action.'
+                    : `${this.selectedCard === null ? 'Choose a card or' : 'Card selected —'} click a highlighted slot to build.`
+                : 'Click a highlighted route on the board. You can choose the discard card first.';
+        }
+        dock.prepend ? dock.prepend(info) : dock.appendChild(info);
+        button('Cancel', () => this.cancelAction());
+    }
+
+    confirmPendingMove() {
+        if (!this.pendingData.review || this.selectedCard === null || !this.pendingData.move) return;
+        const move = { ...this.pendingData.move, card: this.selectedCard };
+        const check = this.logic.resolveMove(this.state.currentPlayerId, move);
+        if (!check.ok) { this.showToast(check.message, 'warning'); return; }
+        this.playMove(this.state.currentPlayerId, move);
     }
 
     // A modal listing the options of one decision; onPick(value)
@@ -1241,7 +1372,7 @@ class UIManager {
             } else if (ev.type === 'gameEnd') {
                 this.addLogEntry(null, 'Final Scoring', 'era');
                 this.refresh();
-                this.showGameOver(ev.ranking);
+                this.showScoring('Rail Era Complete', ev.scores, () => this.showGameOver(ev.ranking));
                 return;
             }
         }
@@ -1333,6 +1464,11 @@ class UIManager {
         if (this.state.currentPlayer.isAI) return;
         const target = e.target.closest('.industry-slot, .connection-line, .brewery-farm, .merchant-group');
         if (!target) return;
+        if (!this.selectedAction) {
+            const slot = target.closest('.industry-slot'), farm = target.closest('.brewery-farm');
+            if (slot || farm) this.onActionSelected(ACTIONS.BUILD);
+            else if (target.closest('.connection-line')) this.onActionSelected(ACTIONS.NETWORK);
+        }
 
         if (this.selectedAction === ACTIONS.BUILD && this.actionStep === 0) {
             // Farm brewery clicks
@@ -1368,7 +1504,10 @@ class UIManager {
         if (this.selectedAction === ACTIONS.NETWORK) {
             const line = target.closest('.connection-line');
             if (line && line.classList.contains('highlight')) {
-                this.afterNetworkFirstSelection(line.dataset.connection);
+                if (this.pendingData.secondRail) {
+                    if (this.pendingData.secondRail.some(t => t.connectionId === line.dataset.connection))
+                        this.proceedWithMove({ type: ACTIONS.NETWORK, links: [this.pendingData.firstLink, line.dataset.connection] });
+                } else if (this.actionStep === 0) this.afterNetworkFirstSelection(line.dataset.connection);
             }
         }
     }
@@ -1411,28 +1550,28 @@ class UIManager {
     // Scoring Display
     // ========================================================================
 
-    showScoring(title, scores) {
+    showScoring(title, scores, onContinue = null) {
         const overlay = document.getElementById('scoring-overlay');
         document.getElementById('scoring-title').textContent = title;
 
-        let html = '<table class="scoring-table"><thead><tr><th>Player</th><th>Link VP</th><th>Industry VP</th><th>Total VP</th></tr></thead><tbody>';
+        let html = '<table class="scoring-table"><thead><tr><th>Player</th><th>Link VP</th><th>Industry VP</th><th>Era VP</th><th>Cumulative VP</th></tr></thead><tbody>';
         for (const s of scores) {
             const player = this.state.players[s.playerId];
             html += `<tr>
                 <td style="color:${player.color}">${player.name}</td>
                 <td>${s.linkVP}</td>
                 <td>${s.industryVP}</td>
-                <td class="total-row">${s.totalVP}</td>
+                <td>${s.linkVP + s.industryVP}</td><td class="total-row">${s.totalVP}</td>
             </tr>`;
         }
         html += '</tbody></table>';
 
-        document.getElementById('scoring-details').innerHTML = html;
+        document.getElementById('scoring-details').innerHTML = html + this.scoringBreakdown();
         overlay.classList.remove('hidden');
 
         const continueFromScoring = () => {
             overlay.classList.add('hidden');
-            this.continueGame(); // only safe to resume AFTER the modal is dismissed
+            if (onContinue) onContinue(); else this.continueGame(); // only safe to resume AFTER the modal is dismissed
         };
         document.getElementById('scoring-continue-btn').onclick = continueFromScoring;
 

@@ -2319,3 +2319,20 @@ h1, h2, h3 {
     #game-log-panel { grid-column: 1 / -1; height: 160px; min-height: 160px; }
     #industries-body { grid-template-columns: minmax(0, 1fr); padding: 10px; }
 }
+
+/* Glance first, expand public state only when needed. */
+#sidebar-info summary { cursor: pointer; color: #f5e4bb; font-size: 11px; line-height: 1.5; }
+#sidebar-info details:not([open]) > :not(summary) { display: none; }
+#turn-order-summary, #markets-panel .market { margin-top: 8px; }
+.player-glance { color: var(--text-secondary); font-size: 11px; margin-top: 4px; }
+.player-panel { padding: 8px 10px; }
+#action-details { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 12px; background: var(--bg-dark); border-bottom: 1px solid var(--accent-gold); font-size: 13px; }
+#action-details.hidden { display: none; }
+#action-details span { flex: 1 1 280px; line-height: 1.5; }
+#action-details button { padding: 7px 12px; background: var(--bg-medium); color: #fff2ae; border: 1px solid var(--accent-gold); border-radius: 4px; cursor: pointer; }
+.card:focus-visible, .connection-line:focus-visible, .industry-slot:focus-visible { outline: 2px solid #fff2ae; outline-offset: 3px; }
+
+.turn-history { display:flex; flex-wrap:wrap; gap:6px; padding:6px; }
+.turn-history small { flex-basis:100%; }
+#scoring-details { max-height:65vh; overflow:auto; text-align:left; }
+#scoring-details details { padding:8px; }
