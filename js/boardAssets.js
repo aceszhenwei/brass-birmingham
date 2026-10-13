@@ -64,6 +64,60 @@ const BoardAssets = (() => {
         southern:      [0.2597, 0.8400],
     };
 
+    // Tile centres/tangents measured on the printed routes, not straight midpoints.
+    const LINK_PLACEMENTS = {
+        'belper-derby': [0.783, 0.170, 75],
+        'belper-leek': [0.645, 0.081, 8],
+        'birmingham-coventry': [0.744, 0.722, 19],
+        'birmingham-dudley': [0.530, 0.682, 13],
+        'birmingham-nuneaton': [0.741, 0.670, -36],
+        'birmingham-oxford': [0.715, 0.780, 56],
+        'birmingham-redditch': [0.603, 0.772, -63],
+        'birmingham-tamworth': [0.646, 0.614, -84],
+        'birmingham-walsall': [0.551, 0.625, 56],
+        'birmingham-worcester': [0.486, 0.803, -46],
+        'burtonOnTrent-cannock': [0.587, 0.420, -21],
+        'burtonOnTrent-derby': [0.747, 0.326, -37],
+        'burtonOnTrent-stone': [0.494, 0.289, 9],
+        'burtonOnTrent-tamworth': [0.712, 0.438, 80],
+        'burtonOnTrent-walsall': [0.585, 0.476, -63],
+        'cannock-stafford': [0.473, 0.395, 70],
+        'cannock-northern': [0.385, 0.436, 2],
+        'cannock-walsall': [0.539, 0.507, 80],
+        'cannock-wolverhampton': [0.414, 0.478, -42],
+        'coalbrookdale-kidderminster': [0.245, 0.685, 55],
+        'coalbrookdale-shrewsbury': [0.161, 0.541, 0],
+        'coalbrookdale-wolverhampton': [0.305, 0.539, 0],
+        'coventry-nuneaton': [0.849, 0.655, 76],
+        'derby-nottingham': [0.829, 0.200, -19],
+        'derby-uttoxeter': [0.668, 0.250, 9],
+        'dudley-kidderminster': [0.355, 0.715, -58],
+        'dudley-wolverhampton': [0.369, 0.619, 64],
+        'gloucester-redditch': [0.572, 0.881, 70],
+        'gloucester-worcester': [0.476, 0.915, 5],
+        'kidderminster-worcester': [0.347, 0.847, 73],
+        'leek-stokeOnTrent': [0.468, 0.099, -31],
+        'nuneaton-tamworth': [0.763, 0.554, 41],
+        'redditch-oxford': [0.666, 0.837, 10],
+        'stafford-stone': [0.333, 0.327, 35],
+        'stokeOnTrent-stone': [0.354, 0.207, -48],
+        'stokeOnTrent-warrington': [0.352, 0.101, 26],
+        'stone-uttoxeter': [0.433, 0.239, -3],
+        'tamworth-walsall': [0.615, 0.558, -20],
+        'walsall-wolverhampton': [0.444, 0.542, 13],
+    };
+
+    function linkPlacement(connId, layout) {
+        const p = LINK_PLACEMENTS[connId], conn = CONNECTIONS.find(c => c.id === connId);
+        if (!p || !conn) return null;
+        const delta = conn.cities.map(id => {
+            const original = OFFICIAL_LAYOUT[id], actual = layout && layout[id] || original;
+            return [actual[0] - original[0], actual[1] - original[1]];
+        });
+        return { x: p[0] + (delta[0][0] + delta[1][0]) / 2,
+            y: p[1] + (delta[0][1] + delta[1][1]) / 2, angle: p[2] };
+    }
+
     // Our industry ids -> the filename stem used under assets/tiles/.
     const TILE_STEM = {
         cottonMill: 'cotton',
@@ -79,14 +133,14 @@ const BoardAssets = (() => {
 
     function tilesReady() { return tilesAvailable; }
 
-    function tileUrl(industryType, level, flipped) {
+    function tileUrl(industryType, level, flipped, color = null) {
         const stem = TILE_STEM[industryType];
         if (!stem) return null;
-        return `assets/tiles/${stem}-${level}${flipped ? '-flipped' : ''}.jpg`;
+        return playerArt(`assets/tiles/${stem}-${level}${flipped ? '-flipped' : ''}.jpg`, color, 'industry');
     }
 
-    function linkUrl(type) {
-        return `assets/tiles/${type === 'canal' ? 'canal' : 'rail'}.jpg`;
+    function linkUrl(type, color = null) {
+        return playerArt(`assets/tiles/${type === 'canal' ? 'canal' : 'rail'}.jpg`, color, 'link');
     }
 
     // Card faces live under assets/cards/, keyed by our own ids: a location
@@ -118,9 +172,69 @@ const BoardAssets = (() => {
         return cardsAvailable;
     }
 
+    const tileImages = new Map(), coloredImages = new Map();
+
+    // Change the coloured ground, preserving neutral details and buildings.
+    function recolorPixels(data, color, kind) {
+        const target = color.match(/^#([a-f0-9]{6})$/i);
+        if (!target) return data;
+        const rgb = [0, 2, 4].map(i => parseInt(target[1].slice(i, i + 2), 16) / 255);
+        const hi = Math.max(...rgb), lo = Math.min(...rgb), d = hi - lo;
+        const saturation = hi ? d / hi : 0;
+        const hue = !d ? 0 : hi === rgb[0] ? ((rgb[1] - rgb[2]) / d + 6) % 6
+            : hi === rgb[1] ? (rgb[2] - rgb[0]) / d + 2 : (rgb[0] - rgb[1]) / d + 4;
+        for (let i = 0; i < data.length; i += 4) {
+            const r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b), diff = max - min;
+            if (!diff || max < 0.15 || diff / max < 0.16) continue;
+            const h = (max === r ? ((g - b) / diff + 6) % 6
+                : max === g ? (b - r) / diff + 2 : (r - g) / diff + 4) * 60;
+            if (kind === 'industry' ? h < 255 || h > 315 : h < 38 || h > 62 || max < 0.45) continue;
+            const v = saturation < 0.2 ? 0.65 + max * 0.35 : max;
+            const c = v * saturation, x = c * (1 - Math.abs(hue % 2 - 1)), m = v - c;
+            const tones = hue < 1 ? [c,x,0] : hue < 2 ? [x,c,0] : hue < 3 ? [0,c,x]
+                : hue < 4 ? [0,x,c] : hue < 5 ? [x,0,c] : [c,0,x];
+            tones.forEach((t, n) => { data[i + n] = Math.round((t + m) * 255); });
+        }
+        return data;
+    }
+
+    function playerArt(url, color, kind) {
+        if (!color || !tileImages.has(url)) return url;
+        const key = `${url}:${color}`;
+        if (coloredImages.has(key)) return coloredImages.get(key);
+        try {
+            const image = tileImages.get(url), canvas = document.createElement('canvas');
+            canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(image, 0, 0);
+            const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            recolorPixels(pixels.data, color, kind);
+            ctx.putImageData(pixels, 0, 0);
+            const result = canvas.toDataURL('image/png');
+            coloredImages.set(key, result);
+            return result;
+        } catch (_) {
+            coloredImages.set(key, url); // Canvas unavailable: retain owner borders.
+            return url;
+        }
+    }
+
     async function probeTiles() {
         // One representative tile is enough to decide the set is present.
         tilesAvailable = !!(await tryLoad('assets/tiles/coal-1.jpg'));
+        if (tilesAvailable) {
+            const urls = ['assets/tiles/canal.jpg', 'assets/tiles/rail.jpg'];
+            for (const [type, levels] of Object.entries(INDUSTRY_DATA)) {
+                for (const tile of levels) for (const flipped of [false, true]) urls.push(tileUrl(type, tile.level, flipped));
+            }
+            await Promise.all(urls.map(url => new Promise(resolve => {
+                const image = new Image();
+                image.onload = () => { tileImages.set(url, image); resolve(); };
+                image.onerror = () => resolve();
+                image.src = url;
+            })));
+        }
         return tilesAvailable;
     }
 
@@ -236,7 +350,7 @@ const BoardAssets = (() => {
 
     return {
         resolve, layoutFor, saveLayout, clearLayout, savedLayout,
-        OFFICIAL_LAYOUT, STORAGE_URL, SLOT_ROWS, slotPositions,
+        OFFICIAL_LAYOUT, STORAGE_URL, SLOT_ROWS, slotPositions, LINK_PLACEMENTS, linkPlacement, recolorPixels,
         probeTiles, tilesReady, tileUrl, linkUrl,
         probeCards, cardsReady, cardUrl, cardBackUrl, matReady, matUrl,
     };
