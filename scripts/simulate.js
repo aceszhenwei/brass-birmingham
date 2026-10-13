@@ -20,7 +20,11 @@
 // (--random N, default 20 per player count) play N games choosing at
 // random among getLegalMoves with every choice expanded, including random
 // income-shortfall decisions: every listed move must apply and every
-// invariant must hold.
+// invariant must hold. Finally (--planner N, default 2 per player count) it
+// plays N games with the production AI (AIPlanner.chooseAction: the planner
+// at Normal and Hard, the heuristic at Easy; seats easy / normal / hard /
+// normal), with the invariants checked after every move, and reports the
+// planner's decision times.
 // The exit code is non-zero if anything went wrong.
 
 'use strict';
@@ -41,6 +45,7 @@ const FIRST = Number(arg('first', 1));
 const COMPARE_A1 = !process.argv.includes('--no-a1');
 const RANDOM = Number(arg('random', 20));
 const MIXED = Number(arg('mixed', 30));
+const PLANNER = Number(arg('planner', 2));
 const ROUNDS = { 2: 10, 3: 9, 4: 8 };
 const DIFFICULTIES = ['easy', 'normal', 'hard'];
 const E = loadEngine();
@@ -117,6 +122,34 @@ for (const players of PLAYERS) {
         }
         totalProblems += MIXED - mixedOk;
         console.log(`  mixed-difficulty games (seats easy/normal/hard/normal): ${mixedOk}/${MIXED} completed in ${((Date.now() - m0) / 1000).toFixed(1)}s`);
+    }
+    if (PLANNER > 0) {
+        const p0 = Date.now();
+        let plannerOk = 0;
+        const times = [];
+        const timed = (state, logic, id, level, rng, opts) => {
+            const t = Date.now();
+            const d = E.AIPlanner.chooseAction(state, logic, id, level, rng, opts);
+            if (level !== 'easy') times.push(Date.now() - t);
+            return d;
+        };
+        for (let i = 1; i <= PLANNER; i++) {
+            const seed = 90000 + 1000 * players + i;
+            try {
+                const g = playGame({ players, seed, difficulty: ['easy', 'normal', 'hard', 'normal'], chooseAction: timed, E });
+                if (g.canalRounds !== ROUNDS[players] || g.railRounds !== ROUNDS[players]) {
+                    roundMismatches.push(`planner seed ${seed}: canal ${g.canalRounds}, rail ${g.railRounds}`);
+                } else {
+                    plannerOk++;
+                }
+            } catch (err) {
+                failures.push(`planner: ${err.message.split('\n').slice(0, 4).join('\n    ')}`);
+            }
+        }
+        totalProblems += PLANNER - plannerOk;
+        const mean = times.length ? times.reduce((a, b) => a + b, 0) / times.length : 0;
+        console.log(`  production planner games (seats easy/normal/hard/normal): ${plannerOk}/${PLANNER} completed in ${((Date.now() - p0) / 1000).toFixed(1)}s ` +
+            `(planner decisions: mean ${mean.toFixed(0)} ms, max ${times.length ? Math.max(...times) : 0} ms)`);
     }
     if (RANDOM > 0) {
         const r0 = Date.now();

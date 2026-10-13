@@ -1,7 +1,7 @@
 'use strict';
 
 // Assignment 10 (options.network / cards / sourcing / shortfall / develop).
-// network 'double' and develop 'horizon' were adopted; the production AI is
+// network 'double' and develop 'horizon' were adopted; the heuristic AI is
 // pinned by recorded games (test/fixtures/assignment10-baseline.json), the AI
 // of Assignment 9 (AIPlayer.LEGACY_A9) by test/ai-invest.test.js. Each
 // variant keeps play legal, pure and reproducible.
@@ -154,7 +154,7 @@ test('value-shortfall: handles farm breweries (the 2-player game that exposed th
 });
 
 for (const players of [2, 3, 4]) {
-    test(`${players} players: the production AI replays the recorded Assignment 10 games exactly`, () => {
+    test(`${players} players: the heuristic AI of Assignment 10 replays its recorded games exactly`, () => {
         for (const g of baseline.games[players]) {
             const r = playGame({ players, seed: g.seed, difficulty: g.difficulty, E });
             assert.equal(fingerprint(r.state, { steps: r.steps, actions: r.actions }), g.fingerprint,

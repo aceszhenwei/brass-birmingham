@@ -6,11 +6,14 @@
 //   node scripts/research/record-ai-baseline.js --preset a6        # test/fixtures/assignment6-baseline.json
 //   node scripts/research/record-ai-baseline.js --preset a8        # test/fixtures/assignment8-baseline.json
 //   node scripts/research/record-ai-baseline.js --preset a9        # test/fixtures/assignment9-baseline.json
-//   node scripts/research/record-ai-baseline.js --preset current   # test/fixtures/assignment10-baseline.json
+//   node scripts/research/record-ai-baseline.js --preset a10       # test/fixtures/assignment10-baseline.json
+//   node scripts/research/record-ai-baseline.js --preset current   # test/fixtures/assignment12-baseline.json
 //
 // Presets: a6 = the AI of Assignments 6-7 (AIPlayer.LEGACY_A6); a8 = the AI of
 // Assignment 8 (AIPlayer.LEGACY_A8); a9 = the AI of Assignment 9
-// (AIPlayer.LEGACY_A9); current = the production AI (since Assignment 10).
+// (AIPlayer.LEGACY_A9); a10 = the heuristic AI of Assignment 10
+// (AIPlayer.chooseAction with no options); current = the production AI
+// (AIPlanner.chooseAction, since Assignment 12; 2 games per player count).
 // Re-record a fixture only for an intended change to that AI.
 // Games: 10 per player count, seeds 6000 + 1000 * players + i, difficulty
 // rotating easy / normal / hard by seed, each AI with its own seeded stream
@@ -34,18 +37,22 @@ const PRESETS = {
         from: 'the production AI since Assignment 8' },
     a9: { options: E.AIPlayer.LEGACY_A9, file: 'assignment9-baseline.json',
         from: 'the production AI since Assignment 9' },
-    current: { options: null, file: 'assignment10-baseline.json', from: 'the production AI since Assignment 10' },
+    a10: { options: null, file: 'assignment10-baseline.json', from: 'the production AI since Assignment 10' },
+    // The planner's wall-clock budget is lifted so the recording does not
+    // depend on the machine's speed (the state budget is unlimited anyway)
+    current: { options: { planner: { ...E.AIPlanner.PRODUCTION, maxMs: Infinity } }, planner: true, games: 2, file: 'assignment12-baseline.json',
+        from: 'the production planner AI since Assignment 12 (four actions ahead), without the wall-clock budget' },
 };
 const p = PRESETS[preset];
-if (!p) { console.error('usage: record-ai-baseline.js --preset a6|a8|a9|current'); process.exit(2); }
+if (!p) { console.error('usage: record-ai-baseline.js --preset a6|a8|a9|a10|current'); process.exit(2); }
 
 const games = {};
 for (const players of [2, 3, 4]) {
     games[players] = [];
-    for (let k = 1; k <= 10; k++) {
+    for (let k = 1; k <= (p.games || 10); k++) {
         const seed = 6000 + 1000 * players + k;
         const difficulty = ['easy', 'normal', 'hard'][k % 3];
-        const g = playGame({ players, seed, difficulty, aiOptions: p.options, E });
+        const g = playGame({ players, seed, difficulty, aiOptions: p.options, chooseAction: p.planner ? E.AIPlanner.chooseAction : null, E });
         games[players].push({ seed, difficulty, steps: g.steps, vp: g.vp, fingerprint: fingerprint(g.state, { steps: g.steps, actions: g.actions }) });
     }
 }
