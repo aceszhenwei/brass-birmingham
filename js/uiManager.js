@@ -86,6 +86,7 @@ class UIManager {
     refresh() {
         this.updateTopBar();
         this.updatePlayerPanels();
+        this.updateTurnOrder();
         this.updateHand();
         this.updateActionButtons();
         this.updatePlayerMat();
@@ -139,6 +140,7 @@ class UIManager {
                     <span class="player-panel-stat" title="Money" style="color:#c9a84c">£${player.money}</span>
                     <span class="player-panel-stat" title="Income level">&#8679; ${this.state.getIncomeLevel(player.id)}</span>
                     <span class="player-panel-stat" title="Cards">${player.hand.length} cds</span>
+                    <span class="player-panel-stat" title="Money spent on actions this round; determines next round's order">Spent £${this.state.moneySpentThisRound[player.id] || 0}</span>
                     <span class="player-panel-stat" title="Links">
                         ${this.state.era === ERA.CANAL ? player.linksRemaining.canal : player.linksRemaining.rail} lnk
                     </span>
@@ -146,6 +148,36 @@ class UIManager {
             `;
             container.appendChild(panel);
         }
+    }
+
+    updateTurnOrder() {
+        const container = document.getElementById('turn-order-summary');
+        container.innerHTML = '';
+        const addOrder = (label, order, showCurrent = false) => {
+            const heading = document.createElement('div');
+            heading.className = 'turn-order-heading';
+            heading.textContent = label;
+            container.appendChild(heading);
+            const list = document.createElement('ol');
+            list.className = 'turn-order-list';
+            order.forEach(id => {
+                const player = this.state.players[id];
+                const row = document.createElement('li');
+                row.dataset.player = id;
+                row.className = showCurrent && id === this.state.currentPlayerId && !this.state.gameOver ? 'current-turn' : '';
+                row.style.borderLeftColor = player.color;
+                row.textContent = `${player.name} · £${this.state.moneySpentThisRound[id] || 0} spent${row.className ? ' · NOW' : ''}`;
+                list.appendChild(row);
+            });
+            container.appendChild(list);
+        };
+        addOrder('This round', this.state.turnOrder, true);
+        if (!this.state.gameOver) addOrder('Next round · provisional', this.state.getNextRoundTurnOrder());
+        const note = document.createElement('p');
+        note.className = 'turn-order-note';
+        note.textContent = this.state.gameOver ? 'Game over.'
+            : 'Least spent goes first. Ties keep current order. Preview changes as players spend.';
+        container.appendChild(note);
     }
 
     updateHand() {
@@ -414,15 +446,15 @@ class UIManager {
         coalTrack.innerHTML = '';
         const coalPrice = this.state.getCoalPrice();
         document.getElementById('coal-current-price').textContent =
-            coalPrice === Infinity ? 'Empty' : `Price: £${coalPrice}`;
+            `Next: £${coalPrice}${this.state.coalMarket === 0 ? ' (supply)' : ''}`;
 
         for (let i = 0; i < COAL_MARKET_PRICES.length; i++) {
             const filled = i >= (COAL_MARKET_PRICES.length - this.state.coalMarket);
             const space = document.createElement('div');
             space.className = `market-space${filled ? ' filled coal' : ''}`;
             space.title = `£${COAL_MARKET_PRICES[i]}`;
-            if (filled) space.innerHTML = this.cubeSvg('coal');
-            else space.textContent = COAL_MARKET_PRICES[i];
+            if (i === COAL_MARKET_PRICES.length - this.state.coalMarket) space.classList.add('next-purchase');
+            space.innerHTML = `${filled ? this.cubeSvg('coal') : ''}<span class="market-price-label">£${COAL_MARKET_PRICES[i]}</span>`;
             coalTrack.appendChild(space);
         }
 
@@ -431,15 +463,15 @@ class UIManager {
         ironTrack.innerHTML = '';
         const ironPrice = this.state.getIronPrice();
         document.getElementById('iron-current-price').textContent =
-            ironPrice === Infinity ? 'Empty' : `Price: £${ironPrice}`;
+            `Next: £${ironPrice}${this.state.ironMarket === 0 ? ' (supply)' : ''}`;
 
         for (let i = 0; i < IRON_MARKET_PRICES.length; i++) {
             const filled = i >= (IRON_MARKET_PRICES.length - this.state.ironMarket);
             const space = document.createElement('div');
             space.className = `market-space${filled ? ' filled iron' : ''}`;
             space.title = `£${IRON_MARKET_PRICES[i]}`;
-            if (filled) space.innerHTML = this.cubeSvg('iron');
-            else space.textContent = IRON_MARKET_PRICES[i];
+            if (i === IRON_MARKET_PRICES.length - this.state.ironMarket) space.classList.add('next-purchase');
+            space.innerHTML = `${filled ? this.cubeSvg('iron') : ''}<span class="market-price-label">£${IRON_MARKET_PRICES[i]}</span>`;
             ironTrack.appendChild(space);
         }
     }

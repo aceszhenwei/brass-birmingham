@@ -166,6 +166,8 @@ class BoardRenderer {
         this.drawMerchants();
         this.drawCities();
         this.drawBuiltLinks();
+        this.drawMarkets();
+        this.drawTurnOrder();
         this.probeAsset();
         this.enableViewControls();
         this.applyView();
@@ -223,6 +225,7 @@ class BoardRenderer {
         this.updateIndustrySlots();
         this.updateLinks();
         this.updateMerchantBeer();
+        this.updateBoardStatus();
     }
 
     // ========================================================================
@@ -1061,7 +1064,141 @@ class BoardRenderer {
     // Merchants
     // ========================================================================
 
+    // The printed markets have two spaces per price, cheapest at the bottom.
+    // Counts and prices come from the same state as legal resource purchases.
+    drawMarkets() {
+        if (!this.state) return;
+        const layer = this.createGroup({ id: 'markets-layer' });
+        const artwork = !!this.assetURL;
+        const markets = [
+            { type: 'coal', name: 'Coal', prices: COAL_MARKET_PRICES, count: this.state.coalMarket,
+                price: this.state.getCoalPrice(), empty: COAL_EMPTY_PRICE, x: [0.845, 0.8665], fill: '#252a30' },
+            { type: 'iron', name: 'Iron', prices: IRON_MARKET_PRICES, count: this.state.ironMarket,
+                price: this.state.getIronPrice(), empty: IRON_EMPTY_PRICE, x: [0.899, 0.921], fill: '#df8429' },
+        ];
+        if (!artwork) layer.appendChild(this.createElement('rect', {
+            x: 8, y: 195, width: 140, height: 142, rx: 4,
+            fill: '#14181f', stroke: '#8a7647',
+        }));
+        markets.forEach((m, marketIndex) => {
+            const group = this.createGroup({ class: 'board-market', 'data-resource': m.type,
+                role: 'img', 'aria-label': `${m.name}: ${m.count} cubes, next cube £${m.price}${m.count === 0 ? ' from general supply' : ''}` });
+            const first = m.prices.length - m.count;
+            m.prices.forEach((price, i) => {
+                const x = artwork ? m.x[i % 2] * this.W : 43 + marketIndex * 66 + (i % 2) * 15;
+                const y = artwork ? (0.519 - Math.floor(i / 2) * 0.0301) * this.H : 320 - Math.floor(i / 2) * 14;
+                const filled = i >= first;
+                const next = m.count > 0 && i === first;
+                const slot = this.createGroup({ class: 'board-market-space',
+                    'data-index': i, 'data-price': price, 'data-filled': filled, 'data-next': next });
+                const title = this.createElement('title');
+                title.textContent = `${m.name} £${price}: ${filled ? 'available' : 'empty'}${next ? ' (next purchase)' : ''}`;
+                slot.appendChild(title);
+                slot.appendChild(this.createElement('rect', {
+                    x: x - 6, y: y - 6, width: 12, height: 12, rx: 1,
+                    fill: filled ? m.fill : '#11161c',
+                    stroke: next ? '#fff2ae' : filled ? (m.type === 'coal' ? '#a4b4c5' : '#ffc47a') : '#50545a',
+                    'stroke-width': next ? 2 : 0.8,
+                }));
+                if (filled) slot.appendChild(this.createElement('path', {
+                    d: `M${x - 5},${y - 4} L${x + 3},${y - 4} L${x + 5},${y - 2}`,
+                    fill: 'none', stroke: m.type === 'coal' ? '#718193' : '#ffce89', 'stroke-width': 1.4,
+                    class: 'market-cube',
+                }));
+                if (!artwork && i % 2 === 0) slot.appendChild(this.text(`£${price}`, {
+                    x: x - 17, y: y + 3, 'font-size': 7, fill: '#e2c98c', 'text-anchor': 'middle',
+                }));
+                group.appendChild(slot);
+            });
+            // A live, explicit quote also covers the unlimited empty-market price.
+            const cx = artwork ? (m.x[0] + m.x[1]) / 2 * this.W : 48 + marketIndex * 66;
+            const cy = artwork ? (marketIndex === 0 ? 0.286 : 0.345) * this.H : 207;
+            group.appendChild(this.createElement('rect', { x: cx - 29, y: cy - 7, width: 58, height: 19,
+                rx: 3, fill: '#14181f', stroke: '#8a7647', 'stroke-width': 0.7 }));
+            group.appendChild(this.text(`${m.name} £${m.price}`, { x: cx, y: cy,
+                'font-size': 8, fill: '#fff2ae', 'text-anchor': 'middle', class: 'board-market-price' }));
+            group.appendChild(this.text(m.count ? `${m.count} cubes · next` : 'Empty · supply', {
+                x: cx, y: cy + 8, 'font-size': 5.5, fill: '#eee0bb', 'text-anchor': 'middle',
+            }));
+            layer.appendChild(group);
+        });
+        this.svg.appendChild(layer);
+    }
+
+    drawTurnOrder() {
+        if (!this.state) return;
+        const layer = this.createGroup({ id: 'turn-order-layer' });
+        const nextOrder = this.state.getNextRoundTurnOrder();
+        const artwork = !!this.assetURL;
+        layer.appendChild(this.text('TURN ORDER · SPENT', {
+            x: artwork ? 92 : 78, y: artwork ? 548 : 56, 'text-anchor': 'middle',
+            'font-size': 7, fill: '#fff2ae', stroke: '#14181f', 'stroke-width': 2, 'paint-order': 'stroke',
+        }));
+        this.state.turnOrder.forEach((id, rank) => {
+            const p = this.state.players[id], spent = this.state.moneySpentThisRound[id] || 0;
+            const active = id === this.state.currentPlayerId && !this.state.gameOver;
+            const x = artwork ? 49 : 8, y = artwork ? (0.674 + rank * 0.081) * this.H - 22 : 66 + rank * 30;
+            const w = artwork ? 84 : 140, h = artwork ? 44 : 28;
+            const card = this.createGroup({ class: 'board-turn-player', 'data-player': id,
+                'data-rank': rank + 1, 'data-next-rank': nextOrder.indexOf(id) + 1, 'data-spent': spent,
+                'data-active': active, role: 'img',
+                'aria-label': `${rank + 1}. ${p.name}${active ? ', current turn' : ''}, spent £${spent}${this.state.gameOver ? '' : `, provisional next round position ${nextOrder.indexOf(id) + 1}`}` });
+            const title = this.createElement('title');
+            title.textContent = `${p.name}: £${spent} spent this round. ${active ? 'Current turn. ' : ''}${this.state.gameOver ? 'Game over.' : 'Next position is provisional; equal spending keeps current order.'}`;
+            card.appendChild(title);
+            card.appendChild(this.createElement('rect', { x, y, width: w, height: h, rx: 4,
+                fill: '#14181f', stroke: active ? '#fff2ae' : p.color, 'stroke-width': active ? 2.3 : 1.2 }));
+            card.appendChild(this.createElement('rect', { x: x + 2, y: y + 2, width: 4, height: h - 4,
+                fill: p.color, rx: 1 }));
+            card.appendChild(this.text(`${rank + 1}. ${p.name.length > 12 ? p.name.slice(0, 11) + '…' : p.name}`, {
+                x: x + 10, y: y + 10, 'font-size': 8, fill: '#f5ecdb',
+            }));
+            card.appendChild(this.text(`Spent £${spent}${active ? ' · NOW' : ''}`, {
+                x: x + 10, y: y + 21, 'font-size': 7, fill: '#fff2ae',
+            }));
+            if (artwork) card.appendChild(this.text(this.state.gameOver ? 'Game over' : `Next #${nextOrder.indexOf(id) + 1} · provisional`, {
+                x: x + 10, y: y + 33, 'font-size': 5.7, fill: '#dfd3b8',
+            }));
+            layer.appendChild(card);
+        });
+        this.svg.appendChild(layer);
+    }
+
+    updateBoardStatus() {
+        this.svg.querySelector('#markets-layer')?.remove();
+        this.svg.querySelector('#turn-order-layer')?.remove();
+        this.drawMarkets();
+        this.drawTurnOrder();
+    }
+
     // A beer barrel, drawn end-on in a merchant's beer space.
+    drawMerchantBeer(parent, cx, cy, mt, compact = false) {
+        if (!mt) return;
+        const available = mt.buys !== 'blank' && mt.hasBeer;
+        const status = mt.buys === 'blank' ? 'none' : available ? 'available' : 'consumed';
+        const g = this.createGroup({ class: 'merchant-beer', 'data-beer': status,
+            transform: `translate(${cx}, ${cy})`, role: 'img',
+            'aria-label': status === 'none' ? 'No beer on a blank merchant tile'
+                : available ? '1 merchant beer available' : 'Merchant beer consumed' });
+        const title = this.createElement('title');
+        title.textContent = available ? '1 merchant beer available; drinking it grants this merchant bonus'
+            : status === 'none' ? 'Blank merchant: no beer' : 'Merchant beer consumed; refills at the start of the Rail Era';
+        g.appendChild(title);
+        g.appendChild(this.createElement('rect', { x: compact ? -6 : -11, y: -8,
+            width: compact ? 18 : 22, height: compact ? 16 : 24, rx: 3,
+            fill: '#14181f', stroke: available ? '#ffe09a' : '#8c98a5', 'stroke-width': available ? 1.5 : 0.9 }));
+        this.drawBarrel(g, compact ? 0 : -2, -1, available);
+        if (!available) g.appendChild(this.createElement('path', {
+            d: 'M-5,-4 L1,2 M1,-4 L-5,2', stroke: '#d9dde2', 'stroke-width': 1.3,
+        }));
+        g.appendChild(this.text(available ? '1' : '0', { x: compact ? 8 : 7, y: 2,
+            'text-anchor': 'middle', 'font-size': 8, fill: '#fff2ae' }));
+        if (!compact) g.appendChild(this.text(available ? 'BEER' : status === 'none' ? 'NONE' : 'USED', {
+            x: 0, y: 12, 'text-anchor': 'middle', 'font-size': 5.5, fill: '#f5ecdb',
+        }));
+        parent.appendChild(g);
+    }
+
     drawBarrel(parent, cx, cy, filled) {
         if (filled) {
             parent.appendChild(this.createElement('ellipse', {
@@ -1148,9 +1285,12 @@ class BoardRenderer {
                         }));
                         g.appendChild(goods);
                     }
-                    if (tiles[i] && tiles[i].hasBeer) {
-                        this.drawBarrel(g, cx - S / 2 + 6, cy - SH / 2 + 6, true);
-                    }
+                    // Cover the printed barrel symbol with live availability,
+                    // in the beer space beside (not inside) its demand tile.
+                    const above = merchId === 'oxford' || merchId === 'gloucester';
+                    const beerX = merchId === 'shrewsbury' ? cx + S / 2 + 17 : cx + (i === 0 ? -8 : 8);
+                    const beerY = merchId === 'shrewsbury' ? cy : cy + (above ? -1 : 1) * (SH / 2 + 12);
+                    this.drawMerchantBeer(g, beerX, beerY, mt);
                 });
                 merchantGroup.appendChild(g);
                 continue;
@@ -1190,7 +1330,7 @@ class BoardRenderer {
                     : [];
                 const mt = matching[i];
 
-                this.drawBarrel(g, x0 + 12, cy, !!(mt && mt.hasBeer));
+                this.drawMerchantBeer(g, x0 + 12, cy, mt, true);
 
                 if (!mt) continue;
                 if (mt.buys === 'blank') {
@@ -1609,5 +1749,6 @@ class BoardRenderer {
         this.drawMerchants();
         this.drawCities();
         this.drawBuiltLinks();
+        this.updateBoardStatus();
     }
 }

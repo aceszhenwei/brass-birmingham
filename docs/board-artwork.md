@@ -18,6 +18,28 @@ The printed map carries the towns, routes, and merchant buildings. The game
 draws the changing state on top: placed chips, resource cubes, beer barrels,
 and highlights.
 
+The printed coal and iron markets now carry live cubes, with the next
+purchase outlined and its price quoted above the track. Empty markets quote
+the General Supply price (£8 coal / £6 iron). The sidebar keeps every space's
+price visible even when occupied. These quotes describe market purchases;
+the normal rules for consuming industry cubes and coal connectivity still apply.
+
+The printed Turn Order Track shows players in current order, their gross
+action spending this round, and a provisional next position. The sidebar
+also lists both orders in full. The preview uses the engine's round-end
+ordering: least spent first, with ties retaining current order. Spending
+resets after the round; loans and sale proceeds do not reduce it.
+
+Merchant beer is shown beside each demand tile with a barrel and `1 BEER`,
+or a crossed empty space marked `0 USED`. Blank merchant tiles show `0 NONE`.
+Non-blank merchants refill at the start of the Rail Era. Demand remains
+visible after beer is consumed. The fallback board uses barrel counts too.
+
+These overlays refresh during normal board updates and after artwork loads.
+Market and turn-track coordinates match the bundled retail board image;
+town calibration adjusts the adjacent merchant beer positions along with
+their demand tiles.
+
 > This artwork is the publisher's copyright and is included as inherited from
 > the upstream project. If you supply your own image, use art you have the
 > right to use.
