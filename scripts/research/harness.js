@@ -192,6 +192,12 @@ const PLANNER_CONFIGS = {
     'p4-m3': { depth: 4, evaluate: 'state', widths: [6, 3, 3], endgame: 'tiebreak', scoringLinks: true, opponents: { kind: 'robust' } },
     // The pre-registered bounded M3 (two sampled worlds), allowed if M3 fails on cost only
     'p4-m3b': { depth: 4, evaluate: 'state', widths: [6, 3, 3], endgame: 'tiebreak', scoringLinks: true, opponents: { kind: 'robust', scenarios: 2 } },
+    // Assignment 16 long-term valuation candidates on the production planner:
+    // A future link value, B era-aware value of Level II+ Canal tiles, C
+    // development credited by the value of the tile it unlocks
+    'p4-fl': { depth: 4, evaluate: 'state', widths: [6, 3, 3], endgame: 'tiebreak', scoringLinks: true, futureLinks: true },
+    'p4-era': { depth: 4, evaluate: 'state', widths: [6, 3, 3], endgame: 'tiebreak', scoringLinks: true, eraValue: true },
+    'p4-dev': { depth: 4, evaluate: 'state', widths: [6, 3, 3], endgame: 'tiebreak', scoringLinks: true, developValue: true },
 };
 function plannerPolicy(level, name, cfg) {
     return (ctx, d) => {

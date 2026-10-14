@@ -72,7 +72,28 @@ const AIPlanner = (() => {
     // turn; scenarios(state, context) returns hypothetical positions
     // [{ state, logic }] in which the steps after the current turn are planned
     // instead, combined by combine(values, context).
-    const DEFAULTS = Object.freeze({ depth: 2, evaluate: 'sum', widths: [6, 3], gamma: 0.6, maxMs: Infinity, maxStates: Infinity, endgame: 'a12', scoringLinks: false, opponentModel: null });
+    // Assignment 16 options (docs/research/ai-strategic-valuation-a16.md),
+    // extra terms in the position value (evaluate 'state'):
+    //   futureLinks: each of the player's links is also credited with the link
+    //     icons of adjacent unflipped tiles (anyone's), times their chance of
+    //     flipping (the heuristic's flip probability, for the tile's owner)
+    //   eraValue: in the Canal Era, the player's Level II+ tiles, which stay on
+    //     the board, are also credited with the VP they would score again at
+    //     the end of the Rail Era: their VP if flipped, else times their chance
+    //     of flipping, times ERA_SURVIVAL
+    //   developValue: when the top tile of one of the player's industries
+    //     differs from the decision's start (developed, or built through), the
+    //     change in its value is credited, discounted by gamma, provided the
+    //     player held a card that could build that industry and at least two
+    //     rounds of the era remain. A tile's value: its VP and income times a
+    //     typical flip probability, less its cost, or 0 if it cannot be built
+    //     in this era.
+    const DEFAULTS = Object.freeze({ depth: 2, evaluate: 'sum', widths: [6, 3], gamma: 0.6, maxMs: Infinity, maxStates: Infinity, endgame: 'a12', scoringLinks: false, opponentModel: null, futureLinks: false, eraValue: false, developValue: false });
+    // Share of Level II+ tiles built in the Canal Era still on the board at the
+    // end of the game (Assignment 13 self-play: 76-94%)
+    const ERA_SURVIVAL = 0.85;
+    // Typical chance of a tile flipping by industry (the heuristic's base rates)
+    const BASE_FLIP = { coalMine: 0.7, ironWorks: 0.7, brewery: 0.5, cottonMill: 0.6, manufacturer: 0.6, pottery: 0.6 };
     // Tie-break weights at the end of the game: an income level outweighs any
     // realistic amount of money, and both are far below 1 VP
     const TIEBREAK_INCOME = 0.01;
@@ -108,6 +129,75 @@ const AIPlanner = (() => {
             ? state.getIncomeLevel(playerId) * TIEBREAK_INCOME + p.money * TIEBREAK_MONEY
             : AIPlayer.research.vpEquivalent(state, { income: state.getIncomeLevel(playerId), money: p.money }, aiOptions);
         return p.vp + scoring.linkVP + scoring.industryVP + expected + cash;
+    }
+
+    // ------------------------------------------------------------------
+    // Assignment 16: long-term valuation terms (futureLinks, eraValue,
+    // developValue; see DEFAULTS). Public information only: the board, the
+    // player's own hand and tiles.
+    // ------------------------------------------------------------------
+
+    // The decision's starting point for developValue: each industry's top-tile
+    // value, and whether the hand holds a card that could build it
+    function strategicContext(obs, playerId, cfg) {
+        const ctx = { topValue: {}, card: {} };
+        if (!cfg.developValue) return ctx;
+        const hand = obs.players[playerId].hand;
+        for (const type of Object.keys(BASE_FLIP)) {
+            ctx.topValue[type] = topTileValue(obs, playerId, type);
+            ctx.card[type] = hand.some(c => c.type === CARD_TYPES.WILD_INDUSTRY || c.type === CARD_TYPES.WILD_LOCATION ||
+                (c.type === CARD_TYPES.INDUSTRY && (c.industryTypes || []).includes(type)) ||
+                (c.type === CARD_TYPES.LOCATION && CITIES[c.location] && CITIES[c.location].slots.some(sl => sl.includes(type))));
+        }
+        ctx.roundsOk = obs.getRoundsRemaining() >= 2;
+        return ctx;
+    }
+
+    function topTileValue(state, playerId, type) {
+        const t = state.getNextTile(playerId, type);
+        if (!t || !(state.era === ERA.CANAL ? t.canalEra : t.railEra)) return 0;
+        const p = BASE_FLIP[type];
+        return AIPlayer.research.vpEquivalent(state, { vp: p * t.vp, income: p * t.income, money: -t.cost });
+    }
+
+    function strategicValue(state, logic, playerId, cfg, ctx) {
+        let v = 0;
+        const flipCache = new Map();
+        const flip = (key, tile, cityId) => {
+            if (!flipCache.has(key)) {
+                flipCache.set(key, AIPlayer.research.flipProbability(state, logic, tile.playerId,
+                    { industryType: tile.type, cityId, tileData: tile.tileData }, cfg.aiOptions));
+            }
+            return flipCache.get(key);
+        };
+        if (cfg.futureLinks) {
+            const unflipped = (key, tile, cityId) => (tile && !tile.flipped ? flip(key, tile, cityId) * tile.tileData.linkVP : 0);
+            for (const [connId, link] of Object.entries(state.boardLinks)) {
+                if (link.playerId !== playerId) continue;
+                const conn = CONNECTIONS.find(c => c.id === connId);
+                if (!conn) continue;
+                for (const cityId of conn.cities) {
+                    if (isCity(cityId)) CITIES[cityId].slots.forEach((_, i) => { v += unflipped(`${cityId}_${i}`, state.boardIndustries[`${cityId}_${i}`], cityId); });
+                    if (isBreweryFarm(cityId)) v += unflipped(cityId, state.breweryFarmTiles[cityId], cityId);
+                }
+                if (conn.viaBrewery) v += unflipped(conn.viaBrewery, state.breweryFarmTiles[conn.viaBrewery], conn.viaBrewery);
+            }
+        }
+        if (cfg.eraValue && state.era === ERA.CANAL) {
+            const own = [...Object.entries(state.boardIndustries).map(([key, t]) => [key, t, key.split('_')[0]]),
+                ...Object.entries(state.breweryFarmTiles).filter(([, t]) => t).map(([key, t]) => [key, t, key])];
+            for (const [key, tile, cityId] of own) {
+                if (tile.playerId !== playerId || tile.tileData.level < 2) continue;
+                v += ERA_SURVIVAL * tile.tileData.vp * (tile.flipped ? 1 : flip(key, tile, cityId));
+            }
+        }
+        if (cfg.developValue && ctx.roundsOk) {
+            for (const type of Object.keys(BASE_FLIP)) {
+                if (!ctx.card[type]) continue;
+                v += cfg.gamma * (topTileValue(state, playerId, type) - ctx.topValue[type]);
+            }
+        }
+        return v;
     }
 
     function plan(realState, playerId, config) {
@@ -196,7 +286,9 @@ const AIPlanner = (() => {
             : roundsLeft <= 1 ? ctx.actionsLeft : roundsLeft === 2 ? ctx.actionsLeft + ACTIONS_PER_TURN : Infinity;
         const finalIndex = obs.era === ERA.RAIL ? eraEndIndex : Infinity;
         // `index`: the number of plan actions taken to reach the position
-        const positionValue = (state, logic, index) => positionValueOf(state, logic, playerId, cfg.aiOptions, index >= finalIndex);
+        const strategic = cfg.futureLinks || cfg.eraValue || cfg.developValue ? strategicContext(obs, playerId, cfg) : null;
+        const positionValue = (state, logic, index) => positionValueOf(state, logic, playerId, cfg.aiOptions, index >= finalIndex) +
+            (strategic && index < finalIndex ? strategicValue(state, logic, playerId, cfg, strategic) : 0);
         const withScoringLink = (index) => cfg.scoringLinks && index <= ctx.actionsLeft;
 
         const model = cfg.opponentModel;

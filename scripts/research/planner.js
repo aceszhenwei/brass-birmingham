@@ -9,7 +9,8 @@
 //           every later level but the last (or widths: [w1, w2, w3]),
 //           evaluate: 'sum' | 'state', gamma, level, aiOptions,
 //           maxStates, maxMs, endgame, scoringLinks (Assignment 14),
-//           opponents (Assignment 15, scripts/research/opponents.js) }
+//           opponents (Assignment 15, scripts/research/opponents.js),
+//           futureLinks, eraValue, developValue (Assignment 16) }
 // Candidates come from the heuristic AI of Assignment 10 (aiOptions are passed
 // to it). Depth 1 is the control: the same candidates and evaluation, no
 // lookahead.
@@ -27,6 +28,8 @@ function createPlanner(E, config = {}) {
         endgame: cfg.endgame || 'a12', scoringLinks: !!cfg.scoringLinks,
         // Assignment 15: cfg.opponents = { kind: 'contest' | 'simulate' | 'robust', ... }
         opponentModel: cfg.opponents ? require('./opponents').createOpponentModel(E, cfg.opponents) : null,
+        // Assignment 16 long-term valuation terms
+        futureLinks: !!cfg.futureLinks, eraValue: !!cfg.eraValue, developValue: !!cfg.developValue,
     };
     const stats = { decisions: 0, states: 0, ms: 0, maxMs: 0, changed: 0, timedOut: 0, times: [] };
 
