@@ -104,9 +104,9 @@ player. Between turns, a short overlay shows the next player's name.
 ## Era scoring
 
 At the end of each era, you score VP for your flipped industry tiles and for
-the links connecting them. The review shows each player's link VP, industry
-VP, total for this era and cumulative VP. Expand a player to inspect each
-link and industry contribution, including unflipped industries worth zero.
+the links connecting them. The review shows each player's Canal Industry, Canal Links and Total Canal,
+then Rail Industry, Rail Links and Total Rail after Rail scoring. Canal
+results stay visible in the Rail review, alongside cumulative VP.
 Canal scoring appears before play resumes in Rail; Rail scoring appears
 before the final ranking. Click **Continue** to advance. All-AI spectator
 games automatically dismiss the review after a short pause.

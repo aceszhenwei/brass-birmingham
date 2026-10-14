@@ -124,7 +124,6 @@ const url = process.env.BRASS_CAPTURE_URL || 'http://127.0.0.1:8080';
     await page.evaluate(() => uiManager.cancelAction());
     let status = await advance('rail');
     if (!status.scoring) throw new Error('Expected Canal scoring');
-    await page.evaluate(() => document.querySelector('#scoring-details details').open = true);
     await capture('scoring');
     await page.click('#scoring-continue-btn');
     status = await advance('rail');

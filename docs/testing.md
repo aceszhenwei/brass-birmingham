@@ -9,9 +9,9 @@ Everything runs on Node.js 22 or later, with no dependencies and no
 node --test test/*.test.js
 ```
 
-It uses Node's built-in test runner and takes about 30 seconds. Pass the files
-with the glob rather than the bare `test/` directory, because Node 22 treats a
-directory argument as a single file.
+It uses Node's built-in test runner. Runtime varies with the planner replay
+tests and available CPU. Pass the files with the glob rather than the bare
+`test/` directory, because Node 22 treats a directory argument as a single file.
 
 The tests load the same `js/` files the browser loads into a Node `vm`
 context (`test/helpers/engine.js`). Inside that context `Math.random` throws,
@@ -65,6 +65,29 @@ complete games the suite plays per player count (default 10).
 | `test/fixtures/assignment14-baseline.json` | 6 games recorded from the production AI since Assignment 14 (`AIPlanner.chooseAction`). Re-record a fixture (`scripts/research/record-ai-baseline.js --preset current\|a12\|a10\|a9\|a8\|a6`) only for an intended AI change |
 | `test/fixtures/assignment12-baseline.json` | 6 games recorded from the Assignment 12 planner (`AIPlanner.A12`), production in Assignments 12–13 |
 | `test/fixtures/assignment14-endgame.json` | Positions from Assignment 13 self-play: two where the Assignment 12 planner took a last-round loan while a scoring link was affordable, and one at the second action of a penultimate-round turn (`ai-endgame.test.js`) |
+
+## Test and research housekeeping
+
+Keep fixture files and their pinned AI presets together: replay tests use the
+older baselines to detect unintended behaviour changes. Do not regenerate
+historical fixtures as part of a cleanup.
+
+Some tests check the same property at different boundaries (engine rules,
+research wrappers, production decisions and browser UI). Shared assertions do
+not make those tests interchangeable. Remove a test only after confirming
+that its specific inputs, policy/version and failure mode remain covered.
+
+Research plans, reports and result tables serve different purposes. Completed
+and rejected experiments still have reproduction commands that use the older
+scripts. Check imports, CLI commands, documentation and active work before
+removing or moving any of them. Raw result folders are ignored separately;
+keep committed fixtures and research documentation tracked.
+
+During concurrent AI development, use a separate worktree, keep cleanup out
+of the shared harness and candidate logic, and wait for the active assignment
+to merge before updating the cleanup branch and rerunning validation. Test
+runtime depends on the planner replays and available CPU; no competitive
+simulation run is needed for housekeeping.
 
 ## Simulation
 

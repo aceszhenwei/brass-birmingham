@@ -96,7 +96,7 @@ test('double Rail uses second map targets and consumes both links in one confirm
 
 test('live coal and iron count badges cover capacity symbols and keep remaining counts separate',()=>{
     const {E,svg,renderer}=svgSetup();
-    for(const type of [E.INDUSTRY_TYPES.COAL_MINE,E.INDUSTRY_TYPES.COAL_MINE]){
+    for(const type of [E.INDUSTRY_TYPES.COAL_MINE,E.INDUSTRY_TYPES.IRON_WORKS]){
         renderer.drawResourceCount(svg,0,0,{type,resourceCubes:2});
     }
     const badges=descendants(svg).filter(n=>n.attrs.class==='live-resource-count');

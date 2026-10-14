@@ -137,7 +137,6 @@ references held by the logic and renderer, and restores the UI log. History
 is cleared at turn, round and era boundaries. This uses the existing clone
 API; the progression engine still owns every forward transition.
 
-For a scoring review, the UI replays a move on an isolated clone once the
-draw deck is empty, capturing the board immediately before the engine scores
-it. Per-component contributions are queried through `calculateEraScore` on
-further independent copies. The real state and scoring rules are unchanged.
+For a scoring review, the UI retains the engine's `eraEnd` and `gameEnd`
+score results separately for Canal and Rail. It displays industry, link and
+era totals without replaying moves or recalculating component scores.
