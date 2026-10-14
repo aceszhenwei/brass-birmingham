@@ -3,7 +3,11 @@
 // (docs/research/ai-opponent-modelling-a15.md, scripts/research/opponents.js).
 //
 //   node scripts/research/ai-opponents.js [--players 2,3,4] [--games 4] [--every 4] [--q build,network]
-//       [--first 1] [--models M1,M2,M3,M3b]
+//       [--first 1] [--models M1,M2,M3,M3b] [--policy M0|M1|M2|M3|M3b]
+//
+// --policy: the planner that plays every seat and whose plans are recorded
+// (default M0, the production planner). Also recorded: whether the step was
+// realised (the player's first move of the next turn has the same target).
 //
 // Production self-play (the Assignment 14 planner at every seat, no wall-clock
 // cut-off; seeds 160000 + 1000 * players + i). At every turn decision whose
@@ -38,6 +42,7 @@ const GAMES = Number(arg('games', 4));
 const EVERY = Number(arg('every', 4));
 const FIRST = Number(arg('first', 1));
 const TIMED = String(arg('models', 'M1,M2,M3')).split(',');
+const POLICY = arg('policy', 'M0');
 const qArg = arg('q', null);
 const Q = qArg ? { build: Number(qArg.split(',')[0]), network: Number(qArg.split(',')[1]) } : DEFAULT_Q;
 const E = loadEngine();
@@ -79,17 +84,20 @@ for (const players of PLAYERS) {
             const id = d.playerId;
             if (d.type === 'shortfall') { logic.play(id, logic.defaultShortfallMove(id)); continue; }
             const turnKey = `${state.era}:${state.round}`;
+            const obs = state.getObservation(id);
+            const obsLogic = new E.GameLogic(obs);
+            const t0 = process.hrtime.bigint();
+            const r = E.AIPlanner.plan(state, id, POLICY === 'M0' ? PROD : { ...PROD, opponentModel: MODELS[POLICY] });
+            const ms0 = Number(process.hrtime.bigint() - t0) / 1e6;
             // Outcome of this player's pending prediction, at its first decision of a later turn
             const p = pending.get(id);
             if (p && p.turnKey !== turnKey) {
                 pending.delete(id);
-                if (state.era === p.era) records.push({ ...p, taken: takenBy(state, p.step, id), legal: legal(state, p.step, id) });
+                if (state.era === p.era) {
+                    records.push({ ...p, taken: takenBy(state, p.step, id), legal: legal(state, p.step, id),
+                        realised: research.targetKey(r.move) === research.targetKey(p.step) });
+                }
             }
-            const obs = state.getObservation(id);
-            const obsLogic = new E.GameLogic(obs);
-            const t0 = process.hrtime.bigint();
-            const r = E.AIPlanner.plan(state, id, PROD);
-            const ms0 = Number(process.hrtime.bigint() - t0) / 1e6;
             const left = state.actionsPerTurn - state.actionsThisTurn;
             const step = r.plan.slice(left).find(m => m.type === A.BUILD || m.type === A.NETWORK);
             if (step && !pending.has(id)) {
@@ -165,19 +173,19 @@ function auc(rows, f) {
 }
 
 console.log(`## Opponent-model prediction quality\n`);
-console.log(`Games: ${GAMES} per player count (${PLAYERS.join(', ')} players), seeds 160000 + 1000 * players + i. Recorded next-turn Build/Network steps: ${records.length}; ` +
+console.log(`Policy: ${POLICY}. Games: ${GAMES} per player count (${PLAYERS.join(', ')} players), seeds 160000 + 1000 * players + i. Recorded next-turn Build/Network steps: ${records.length}; ` +
     `excluded because the plan's own current-turn steps already block them: ${records.length - valid.length}.`);
 console.log(`\nM1 q fitted on odd games: build ${qFit.build}, network ${qFit.network} (the run used build ${Q.build}, network ${Q.network} for timing).\n`);
 console.log('### Outcomes (all games)\n');
-console.log('| Players / type | Steps | Taken by an opponent | Illegal at the next decision (any reason) | Opponent turns before the next one (mean) | Turns with exposure > 0 (mean) | Summed exposure (mean) |');
-console.log('|---|---|---|---|---|---|---|');
+console.log('| Players / type | Steps | Taken by an opponent | Illegal at the next decision (any reason) | Realised next turn | Opponent turns before the next one (mean) | Turns with exposure > 0 (mean) | Summed exposure (mean) |');
+console.log('|---|---|---|---|---|---|---|---|');
 for (const n of PLAYERS) {
     const rows = valid.filter(r => r.players === n);
-    console.log(`| ${n} | ${rows.length} | ${pct(rows.filter(r => r.taken).length, rows.length)} | ${pct(rows.filter(r => !r.legal).length, rows.length)} | ${mean(rows.map(r => r.opponentsBefore)).toFixed(2)} | ${mean(rows.map(r => r.k)).toFixed(2)} | ${mean(rows.map(r => r.exposure)).toFixed(2)} |`);
+    console.log(`| ${n} | ${rows.length} | ${pct(rows.filter(r => r.taken).length, rows.length)} | ${pct(rows.filter(r => !r.legal).length, rows.length)} | ${pct(rows.filter(r => r.realised).length, rows.length)} | ${mean(rows.map(r => r.opponentsBefore)).toFixed(2)} | ${mean(rows.map(r => r.k)).toFixed(2)} | ${mean(rows.map(r => r.exposure)).toFixed(2)} |`);
 }
 for (const type of [A.BUILD, A.NETWORK]) {
     const rows = valid.filter(r => r.type === type);
-    console.log(`| ${type} | ${rows.length} | ${pct(rows.filter(r => r.taken).length, rows.length)} | ${pct(rows.filter(r => !r.legal).length, rows.length)} | ${mean(rows.map(r => r.opponentsBefore)).toFixed(2)} | ${mean(rows.map(r => r.k)).toFixed(2)} | ${mean(rows.map(r => r.exposure)).toFixed(2)} |`);
+    console.log(`| ${type} | ${rows.length} | ${pct(rows.filter(r => r.taken).length, rows.length)} | ${pct(rows.filter(r => !r.legal).length, rows.length)} | ${pct(rows.filter(r => r.realised).length, rows.length)} | ${mean(rows.map(r => r.opponentsBefore)).toFixed(2)} | ${mean(rows.map(r => r.k)).toFixed(2)} | ${mean(rows.map(r => r.exposure)).toFixed(2)} |`);
 }
 console.log(`\n### Prediction of "taken by an opponent" (test games: ${test.length} steps, ${test.filter(r => r.taken).length} taken)\n`);
 console.log('| Predictor | Brier score | AUC | Mean prediction | Taken when predicted >= 0.5 | Taken when predicted < 0.5 |');
