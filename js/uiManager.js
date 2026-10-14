@@ -13,6 +13,7 @@ class UIManager {
         this.actionStep = 0; // Multi-step action tracking
         this.pendingData = {}; // Data accumulated during multi-step actions
         this.gameLog = []; // Game log entries
+        this.eraScores = {};
         this.undoHistory = [];
         this.turnPlayerId = null; // whose turn was last announced (turn transitions)
     }
@@ -1157,53 +1158,11 @@ class UIManager {
         this.refresh();
     }
 
-    scoringBreakdown() {
-        const board = this.scoringBoard;
-        if (!board) return '';
-        const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-        let html = '';
-        for (const player of board.players) {
-            html += `<details><summary>${escape(player.name)} — scoring breakdown</summary><ul>`;
-            // Isolate each component and ask the existing scoring implementation
-            // for its contribution. No scoring rules are reimplemented in UI.
-            for (const [key, link] of Object.entries(board.boardLinks)) {
-                if (link.playerId !== player.id) continue;
-                const copy = board.clone(); copy.boardLinks = { [key]: link };
-                const score = copy.calculateEraScore().find(s => s.playerId === player.id);
-                html += `<li>${escape(key)}: ${score.linkVP} link VP</li>`;
-            }
-            for (const [field, tiles] of [['boardIndustries', board.boardIndustries], ['breweryFarmTiles', board.breweryFarmTiles]]) {
-                for (const [key, tile] of Object.entries(tiles)) {
-                    if (!tile || tile.playerId !== player.id) continue;
-                    const copy = board.clone(); copy.boardIndustries = {}; copy.breweryFarmTiles = {};
-                    copy[field] = { [key]: tile };
-                    const score = copy.calculateEraScore().find(s => s.playerId === player.id);
-                    html += `<li>${escape(key)} (${escape(tile.type || 'industry')}, ${tile.flipped ? 'flipped' : 'unflipped'}): ${score.industryVP} industry VP</li>`;
-                }
-            }
-            html += '</ul></details>';
-        }
-        return html;
-    }
-
     playMove(playerId, move) {
         const before = this.state.clone();
         const log = this.gameLog.slice();
-        // Replay only on an independent copy to capture the board immediately
-        // before scoring, including the final action and income shortfalls.
-        let scoringBoard = null;
-        if (before.drawDeck.length === 0) {
-        const probe = before.clone();
-        const calculate = probe.calculateEraScore;
-        probe.calculateEraScore = function () {
-            scoringBoard = this.clone();
-            return calculate.call(this);
-        };
-        new GameLogic(probe).play(playerId, move);
-        }
         const result = this.logic.play(playerId, move);
         if (result.success) {
-            this.scoringBoard = scoringBoard;
             const sameTurn = this.state.era === before.era && this.state.round === before.round
                 && this.state.currentPlayerId === playerId && this.logic.getCurrentDecision().type === 'action';
             if (!before.players[playerId].isAI && sameTurn) this.undoHistory.push({ state: before, log });
@@ -1556,19 +1515,25 @@ class UIManager {
         const overlay = document.getElementById('scoring-overlay');
         document.getElementById('scoring-title').textContent = title;
 
-        let html = '<table class="scoring-table"><thead><tr><th>Player</th><th>Link VP</th><th>Industry VP</th><th>Era VP</th><th>Cumulative VP</th></tr></thead><tbody>';
-        for (const s of scores) {
-            const player = this.state.players[s.playerId];
-            html += `<tr>
-                <td style="color:${player.color}">${player.name}</td>
-                <td>${s.linkVP}</td>
-                <td>${s.industryVP}</td>
-                <td>${s.linkVP + s.industryVP}</td><td class="total-row">${s.totalVP}</td>
-            </tr>`;
+        const era = title.startsWith('Canal') ? 'Canal' : 'Rail';
+        this.eraScores[era] = scores.map(score => ({ ...score }));
+        const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        let html = '<div class="era-score-cards">';
+        for (const player of this.state.players) {
+            html += `<section class="era-score-card"><h3 style="color:${player.color}">${escape(player.name)}</h3><dl>`;
+            for (const phase of ['Canal', 'Rail']) {
+                const score = this.eraScores[phase]?.find(s => s.playerId === player.id);
+                if (!score) continue;
+                html += `<dt>${phase} Industry</dt><dd>${score.industryVP}</dd>
+                    <dt>${phase} Links</dt><dd>${score.linkVP}</dd>
+                    <dt class="era-score-total">Total ${phase}</dt><dd class="era-score-total">${score.industryVP + score.linkVP}</dd>`;
+            }
+            const current = scores.find(s => s.playerId === player.id);
+            if (current) html += `<dt class="era-score-cumulative">Cumulative VP</dt><dd class="era-score-cumulative">${current.totalVP}</dd>`;
+            html += '</dl></section>';
         }
-        html += '</tbody></table>';
-
-        document.getElementById('scoring-details').innerHTML = html + this.scoringBreakdown();
+        html += '</div>';
+        document.getElementById('scoring-details').innerHTML = html;
         overlay.classList.remove('hidden');
 
         const continueFromScoring = () => {
