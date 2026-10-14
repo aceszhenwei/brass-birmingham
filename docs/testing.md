@@ -209,3 +209,18 @@ from one seeded game; player colours, merchants and available targets vary.
 Update `docs/gameplay.md` captions with the images. Historical reports and
 research results describe earlier stages and should retain their original
 claims rather than being rewritten to match the current UI.
+
+## Human playtesting logs
+
+`human-games.test.js` covers observational recording, rejected moves, undo,
+checkpoint/restore, completed-game replay and scoring, corrupted/incompatible
+logs, duplicates, incremental collection, synthetic exclusion, decision
+inspection and end-of-game export gating. Two deterministic automated samples
+are retained under `research/human-games/samples/`; they are not human evidence.
+The focused shortfall prefix stops at its first debt decision. A17 adds no
+competitive simulation campaign.
+
+Run `node scripts/research/record-version.js` after source changes to check
+the recorder's exact engine/AI source identities. See the
+[playtesting workflow](../research/human-games/README.md) for intentional format
+updates and analysis commands.

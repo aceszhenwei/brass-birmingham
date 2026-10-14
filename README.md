@@ -35,6 +35,7 @@ upstream game and adds:
 - an engine that runs the whole game itself, with seeded, reproducible randomness, cloning and save/restore support, and one legal-move API for the UI, the AI and tools;
 - fair-information AI corrections and measured improvements to investment, overbuilding, rail links and late-game development;
 - card/map-first Build and Network, player-coloured components, live board markets and turn order, merchant demand/beer indicators, an expanded industry sheet, active-turn undo/reset and scoring reviews;
+- completed-game diagnostic exports and a [human playtesting workflow](research/human-games/README.md) for offline replay and analysis;
 - an automated test suite, headless simulations, and continuous integration.
 
 The fork builds on upstream's implementation. Its rules and engine work is

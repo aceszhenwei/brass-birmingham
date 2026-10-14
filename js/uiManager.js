@@ -27,6 +27,10 @@ class UIManager {
         // separate so AI thinking never changes the game's shuffles.
         this.aiRng = new SeededRandom((gameState.rng.seed ^ 0x9E3779B9) >>> 0);
 
+        // Recording failure must not interrupt or influence play.
+        this.recordingError = null;
+        try { this.recorder = new GameRecord.Recorder(gameState); }
+        catch (error) { this.recordingError = error.message; }
         this.bindEvents();
         this.addLogEntry(null, `Game started with ${this.state.numPlayers} players`, 'system');
         this.addLogEntry(null, `Canal Era`, 'era');
@@ -1152,6 +1156,7 @@ class UIManager {
         for (const key of Object.keys(this.state)) delete this.state[key];
         Object.assign(this.state, snapshot.state.clone());
         this.gameLog = snapshot.log.slice();
+        if (this.recorder) this.recorder.rewind(snapshot.recordLength, this.state);
         this.cancelAction();
         this.closeModal();
         this.renderLog();
@@ -1163,9 +1168,10 @@ class UIManager {
         const log = this.gameLog.slice();
         const result = this.logic.play(playerId, move);
         if (result.success) {
+            if (this.recorder) this.recorder.append(before, result, this.state);
             const sameTurn = this.state.era === before.era && this.state.round === before.round
                 && this.state.currentPlayerId === playerId && this.logic.getCurrentDecision().type === 'action';
-            if (!before.players[playerId].isAI && sameTurn) this.undoHistory.push({ state: before, log });
+            if (!before.players[playerId].isAI && sameTurn) this.undoHistory.push({ state: before, log, recordLength: this.recorder ? this.recorder.length - 1 : 0 });
             else this.undoHistory = [];
         }
         if (result.success) {
@@ -1549,6 +1555,17 @@ class UIManager {
         }
     }
 
+    exportGameLog() {
+        let url;
+        try {
+            const data = this.recorder.export(this.state);
+            url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+            const anchor = document.createElement('a');
+            anchor.href = url; anchor.download = `${data.id}.json`; anchor.click();
+        } catch (error) { this.showToast(`Game log unavailable: ${error.message}`, 'error'); }
+        finally { if (url) setTimeout(() => URL.revokeObjectURL(url), 1000); }
+    }
+
     // ranking: GameState.getFinalRanking() — VP, then income level, then
     // money (rulebook p.7); fully tied players share a rank
     showGameOver(ranking) {
@@ -1568,6 +1585,14 @@ class UIManager {
         html += '</tbody></table>';
 
         document.getElementById('final-scores').innerHTML = html;
+        const exportButton = document.getElementById('export-game-log');
+        const error = this.recordingError || this.recorder?.data.error;
+        exportButton.disabled = !!error || !this.recorder?.data.complete;
+        exportButton.textContent = exportButton.disabled ? 'Game log unavailable' : 'Export Game Log';
+        document.getElementById('recording-status').textContent = error
+            ? `Recording failed: ${error}` : this.recorder?.data.complete
+                ? 'Complete diagnostic record: includes hidden cards. Save for offline analysis.' : 'Recording incomplete.';
+        exportButton.onclick = () => this.exportGameLog();
         overlay.classList.remove('hidden');
 
         document.getElementById('new-game-btn').onclick = () => {

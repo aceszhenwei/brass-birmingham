@@ -48,3 +48,14 @@ choose moves and present what happened; neither advances the game. See
 | `scripts/simulate.js` | The headless simulation run ([`testing.md`](testing.md)) |
 | `scripts/research/` | AI research experiments ([`research/ai-baseline-audit.md`](research/ai-baseline-audit.md)), including the experimental planner `planner.js` ([`research/ai-planning-a11.md`](research/ai-planning-a11.md)), which the game does not load, the Assignment 13 capability-gap diagnostics `ai-gap.js` and `ai-gap-trace.js` ([`research/human-strategy-a13.md`](research/human-strategy-a13.md)), the Assignment 14 endgame scenarios and timing `ai-endgame.js` ([`research/ai-endgame-evaluation-a14.md`](research/ai-endgame-evaluation-a14.md)), and the Assignment 15 opponent models `opponents.js` with their diagnostics `ai-opponents.js` ([`research/ai-opponent-modelling-a15.md`](research/ai-opponent-modelling-a15.md)), which plug into the planner's inert `opponentModel` hook, and the Assignment 16 valuation diagnostics `ai-strategic.js` ([`research/ai-strategic-valuation-a16.md`](research/ai-strategic-valuation-a16.md)) |
 | `.github/workflows/` | Continuous integration ([`testing.md`](testing.md)) |
+
+## Human-game recording
+
+`js/gameRecorder.js` observes completed moves at `UIManager.playMove`, keeping
+an initial serialized state, resolved actions/events and final results. It
+never wraps or modifies the engine or planner. Undo truncates the same history.
+`GameRecord.replay` uses the existing engine to validate the complete sequence.
+The filesystem-based analysis and inspection commands live in
+`scripts/research/human-games.js`, `analyze-human-games.js` and
+`inspect-human-game.js`; no shared research harness changes. See the
+[workflow and format](../research/human-games/README.md).
