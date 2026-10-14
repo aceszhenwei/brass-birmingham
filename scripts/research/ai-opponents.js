@@ -3,6 +3,7 @@
 // (docs/research/ai-opponent-modelling-a15.md, scripts/research/opponents.js).
 //
 //   node scripts/research/ai-opponents.js [--players 2,3,4] [--games 4] [--every 4] [--q build,network]
+//       [--first 1] [--models M1,M2,M3,M3b]
 //
 // Production self-play (the Assignment 14 planner at every seat, no wall-clock
 // cut-off; seeds 160000 + 1000 * players + i). At every turn decision whose
@@ -35,6 +36,8 @@ function arg(name, fallback) {
 const PLAYERS = String(arg('players', '2,3,4')).split(',').map(Number);
 const GAMES = Number(arg('games', 4));
 const EVERY = Number(arg('every', 4));
+const FIRST = Number(arg('first', 1));
+const TIMED = String(arg('models', 'M1,M2,M3')).split(',');
 const qArg = arg('q', null);
 const Q = qArg ? { build: Number(qArg.split(',')[0]), network: Number(qArg.split(',')[1]) } : DEFAULT_Q;
 const E = loadEngine();
@@ -44,6 +47,7 @@ const MODELS = {
     M1: createOpponentModel(E, { kind: 'contest', q: Q }),
     M2: createOpponentModel(E, { kind: 'simulate' }),
     M3: createOpponentModel(E, { kind: 'robust' }),
+    M3b: createOpponentModel(E, { kind: 'robust', scenarios: 2 }),
 };
 const research = MODELS.M3.research;
 
@@ -60,10 +64,11 @@ function takenBy(state, step, id) {
 const legal = (state, step, id) => { const { card, ...rest } = step; return new E.GameLogic(state).resolveMove(id, rest, { requireCard: false }).ok; };
 
 const records = [];
-const timing = { M0: [], M1: [], M2: [], M3: [] };
-const changed = { M1: 0, M2: 0, M3: 0, n: 0 };
+const timing = {};
+const changed = {};
+const slot = (o, players, name, init) => { o[players] = o[players] || {}; if (!(name in o[players])) o[players][name] = init(); return o[players]; };
 for (const players of PLAYERS) {
-    for (let i = 1; i <= GAMES; i++) {
+    for (let i = FIRST; i < FIRST + GAMES; i++) {
         const seed = 160000 + 1000 * players + i;
         const names = ['A', 'B', 'C', 'D'].slice(0, players);
         const state = new E.GameState(players, names, names.map(() => ({ isAI: true, difficulty: 'normal' })), { seed });
@@ -105,13 +110,14 @@ for (const players of PLAYERS) {
                 });
             }
             if (EVERY > 0 && state.actionsThisTurn === 0 && decisions++ % EVERY === 0) {
-                timing.M0.push(ms0);
-                changed.n++;
-                for (const name of ['M1', 'M2', 'M3']) {
+                slot(timing, players, 'M0', () => []).M0.push(ms0);
+                slot(changed, players, 'n', () => 0).n++;
+                for (const name of TIMED) {
                     const t = process.hrtime.bigint();
                     const rm = E.AIPlanner.plan(state, id, { ...PROD, opponentModel: MODELS[name] });
-                    timing[name].push(Number(process.hrtime.bigint() - t) / 1e6);
-                    if (JSON.stringify(rm.move) !== JSON.stringify(r.move)) changed[name]++;
+                    slot(timing, players, name, () => [])[name].push(Number(process.hrtime.bigint() - t) / 1e6);
+                    if (JSON.stringify(rm.move) !== JSON.stringify(r.move)) slot(changed, players, name, () => 0)[name]++;
+                    else slot(changed, players, name, () => 0);
                 }
             }
             // The production move (identical to AIPlanner.chooseAction's: the plan is deterministic)
@@ -190,11 +196,14 @@ for (const [lo, hi] of [[0, 1e-9], [1e-9, 0.1], [0.1, 0.2], [0.2, 0.4], [0.4, 1.
     const rows = test.filter(r => m1Of(r) >= lo && m1Of(r) < hi);
     console.log(`| ${k} | ${rows.length} | ${pct(rows.filter(r => r.taken).length, rows.length)} | ${mean(rows.map(predictors['M1 (q fitted)'])).toFixed(3)} |`);
 }
-if (changed.n) {
-    console.log(`\n### Cost and decision changes (${changed.n} turn-start positions, one process)\n`);
-    console.log('| Planner | Mean ms | p95 ms | Max ms | First move differs from M0 |');
-    console.log('|---|---|---|---|---|');
-    for (const name of ['M0', 'M1', 'M2', 'M3']) {
-        console.log(`| ${name} | ${mean(timing[name]).toFixed(0)} | ${quantile(timing[name], 0.95).toFixed(0)} | ${Math.max(...timing[name]).toFixed(0)} | ${name === 'M0' ? '–' : pct(changed[name], changed.n)} |`);
+if (Object.keys(changed).length) {
+    console.log(`\n### Cost and decision changes (turn-start positions, one process)\n`);
+    console.log('| Players | Planner | Positions | Mean ms | p95 ms | Max ms | First move differs from M0 |');
+    console.log('|---|---|---|---|---|---|---|');
+    for (const n of Object.keys(timing)) {
+        for (const name of ['M0', ...TIMED]) {
+            const t = timing[n][name];
+            console.log(`| ${n} | ${name} | ${t.length} | ${mean(t).toFixed(0)} | ${quantile(t, 0.95).toFixed(0)} | ${Math.max(...t).toFixed(0)} | ${name === 'M0' ? '–' : pct(changed[n][name], changed[n].n)} |`);
+        }
     }
 }

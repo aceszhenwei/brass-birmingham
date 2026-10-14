@@ -42,9 +42,11 @@
 
 'use strict';
 
-// Per-opponent-turn take rates of M1 (fitted in ai-opponents.js predict; see
-// the report). Overridable with options.q.
-const DEFAULT_Q = { build: 0.15, network: 0.15 };
+// Per-opponent-turn take rates of M1, fitted by maximum likelihood on the
+// stage 1 diagnostic games (ai-opponents.js; the report, section 3) and then
+// frozen. Builds: exposure did not predict takes (q = 0). Overridable with
+// options.q.
+const DEFAULT_Q = { build: 0, network: 0.29 };
 
 function createOpponentModel(E, options = {}) {
     const kind = options.kind;
@@ -182,8 +184,9 @@ function createOpponentModel(E, options = {}) {
 
     // Chance that none of m marked cards is among h drawn from u
     function noneDrawn(u, m, h) {
+        if (m <= 0) return 1;
         let p = 1;
-        for (let i = 0; i < h; i++) p *= Math.max(0, (u - m - i) / (u - i));
+        for (let i = 0; i < Math.min(h, u); i++) p *= Math.max(0, (u - m - i) / (u - i));
         return p;
     }
 
