@@ -393,5 +393,7 @@ const AIPlanner = (() => {
         return { action: r.move.type, move: r.move, plan: r.plan, planStats: { states: r.states, ms: r.ms, timedOut: r.timedOut } };
     }
 
-    return { chooseAction, plan, positionValue: positionValueOf, PRODUCTION, A12, THREE_ACTION, DEFAULTS };
+    // research: the Assignment 16 valuation terms, for tests and diagnostics
+    return { chooseAction, plan, positionValue: positionValueOf, PRODUCTION, A12, THREE_ACTION, DEFAULTS,
+        research: { strategicContext, strategicValue } };
 })();
