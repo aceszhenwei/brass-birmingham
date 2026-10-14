@@ -184,6 +184,14 @@ const PLANNER_CONFIGS = {
     'p4-a': { depth: 4, evaluate: 'state', widths: [6, 3, 3], endgame: 'tiebreak' },
     'p4-b': { depth: 4, evaluate: 'state', widths: [6, 3, 3], scoringLinks: true },
     'p4-c': { depth: 4, evaluate: 'state', widths: [6, 3, 3], endgame: 'tiebreak', scoringLinks: true },
+    // Assignment 15 opponent models on the production planner (p4-c, M0):
+    // M1 contested-opportunity weights, M2 one simulated opponent world, M3
+    // three sampled worlds combined robustly (scripts/research/opponents.js)
+    'p4-m1': { depth: 4, evaluate: 'state', widths: [6, 3, 3], endgame: 'tiebreak', scoringLinks: true, opponents: { kind: 'contest' } },
+    'p4-m2': { depth: 4, evaluate: 'state', widths: [6, 3, 3], endgame: 'tiebreak', scoringLinks: true, opponents: { kind: 'simulate' } },
+    'p4-m3': { depth: 4, evaluate: 'state', widths: [6, 3, 3], endgame: 'tiebreak', scoringLinks: true, opponents: { kind: 'robust' } },
+    // The pre-registered bounded M3 (two sampled worlds), allowed if M3 fails on cost only
+    'p4-m3b': { depth: 4, evaluate: 'state', widths: [6, 3, 3], endgame: 'tiebreak', scoringLinks: true, opponents: { kind: 'robust', scenarios: 2 } },
 };
 function plannerPolicy(level, name, cfg) {
     return (ctx, d) => {

@@ -63,7 +63,16 @@ const AIPlanner = (() => {
     //     only in the era's last round)
     //   scoringLinks: within the current turn, also consider the legal single
     //     link that would score the most VP now (if it scores any)
-    const DEFAULTS = Object.freeze({ depth: 2, evaluate: 'sum', widths: [6, 3], gamma: 0.6, maxMs: Infinity, maxStates: Infinity, endgame: 'a12', scoringLinks: false });
+    // opponentModel (research hook, Assignment 15, scripts/research/opponents.js;
+    // no production configuration sets it): an object that may adjust how plan
+    // steps after the current turn are valued, given the opponents' turns that
+    // come first. prepare(obs, logic, playerId, info) is called once per
+    // decision on the player's observation and returns the model's context;
+    // stepWeight(move, context) scales the value of a step after the current
+    // turn; scenarios(state, context) returns hypothetical positions
+    // [{ state, logic }] in which the steps after the current turn are planned
+    // instead, combined by combine(values, context).
+    const DEFAULTS = Object.freeze({ depth: 2, evaluate: 'sum', widths: [6, 3], gamma: 0.6, maxMs: Infinity, maxStates: Infinity, endgame: 'a12', scoringLinks: false, opponentModel: null });
     // Tie-break weights at the end of the game: an income level outweighs any
     // realistic amount of money, and both are far below 1 VP
     const TIEBREAK_INCOME = 0.01;
@@ -190,13 +199,24 @@ const AIPlanner = (() => {
         const positionValue = (state, logic, index) => positionValueOf(state, logic, playerId, cfg.aiOptions, index >= finalIndex);
         const withScoringLink = (index) => cfg.scoringLinks && index <= ctx.actionsLeft;
 
+        const model = cfg.opponentModel;
+        const modelContext = model ? model.prepare(obs, obsLogic, playerId, { actionsLeft: ctx.actionsLeft }) : null;
+
         // Best value of continuing with `steps` more actions, the first being
         // action number `index` (1-based) of the plan. `base` is the position
-        // value before it (evaluate 'state').
-        function continuation(state, logic, steps, index, base) {
+        // value before it (evaluate 'state'). `inScenario`: already inside one
+        // of the opponent model's hypothetical positions.
+        function continuation(state, logic, steps, index, base, inScenario = false) {
             if (steps <= 0 || state.players[playerId].hand.length === 0) return { value: 0, moves: [] };
             const beyondTurn = index > ctx.actionsLeft;
             if ((beyondTurn && ctx.lastRoundOfEra) || index > eraEndIndex) return { value: 0, moves: [] };
+            if (beyondTurn && !inScenario && model && model.scenarios && cfg.evaluate === 'state') {
+                const worlds = model.scenarios(state, modelContext);
+                if (worlds.length) {
+                    const results = worlds.map(w => continuation(w.state, w.logic, steps, index, positionValue(w.state, w.logic, index - 1), true));
+                    return { value: model.combine(results.map(r => r.value), modelContext), moves: results[0].moves };
+                }
+            }
             const weight = beyondTurn ? cfg.gamma : 1;
             let best = null;
             for (const c of candidates(state, logic, widthAt(cfg, index, steps), withScoringLink(index))) {
@@ -217,8 +237,9 @@ const AIPlanner = (() => {
                     if (!next) continue;
                     const v1 = positionValue(next.state, next.logic, index);
                     value = weight * (v1 - base);
+                    if (beyondTurn && model && model.stepWeight) value *= model.stepWeight(c.move, modelContext);
                     if (steps > 1) {
-                        const rest = continuation(next.state, next.logic, steps - 1, index + 1, v1);
+                        const rest = continuation(next.state, next.logic, steps - 1, index + 1, v1, inScenario);
                         value += rest.value;
                         moves = moves.concat(rest.moves);
                     }
