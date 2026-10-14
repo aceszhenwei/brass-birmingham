@@ -23,7 +23,7 @@ function arg(name, fallback) {
 }
 const E = loadEngine(); const A = E.ACTIONS;
 const [players, seed, who, round] = [arg('players', 4), arg('seed', 904002), arg('player', 0), arg('round', 8)];
-const CFG = { planner: { ...E.AIPlanner.PRODUCTION, maxMs: Infinity } };
+const CFG = { planner: { ...E.AIPlanner.A12, maxMs: Infinity } }; // the Assignment 12 planner (production in Assignment 13)
 const names = ['A','B','C','D'].slice(0, players);
 const state = new E.GameState(players, names, names.map(() => ({ isAI: true, difficulty: 'normal' })), { seed });
 const logic = new E.GameLogic(state); const rng = new E.SeededRandom(aiSeedFor(seed));

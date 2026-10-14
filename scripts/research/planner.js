@@ -8,7 +8,7 @@
 // config: { depth: 1-4, width: first-level candidates, width2: candidates at
 //           every later level but the last (or widths: [w1, w2, w3]),
 //           evaluate: 'sum' | 'state', gamma, level, aiOptions,
-//           maxStates, maxMs }
+//           maxStates, maxMs, endgame, scoringLinks (Assignment 14) }
 // Candidates come from the heuristic AI of Assignment 10 (aiOptions are passed
 // to it). Depth 1 is the control: the same candidates and evaluation, no
 // lookahead.
@@ -23,6 +23,7 @@ function createPlanner(E, config = {}) {
     const planConfig = {
         depth: cfg.depth, evaluate: cfg.evaluate, widths, gamma: cfg.gamma, level: cfg.level, aiOptions: cfg.aiOptions,
         maxStates: cfg.maxStates === undefined ? Infinity : cfg.maxStates, maxMs: cfg.maxMs === undefined ? Infinity : cfg.maxMs,
+        endgame: cfg.endgame || 'a12', scoringLinks: !!cfg.scoringLinks,
     };
     const stats = { decisions: 0, states: 0, ms: 0, maxMs: 0, changed: 0, timedOut: 0, times: [] };
 

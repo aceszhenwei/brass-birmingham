@@ -7,13 +7,16 @@
 //   node scripts/research/record-ai-baseline.js --preset a8        # test/fixtures/assignment8-baseline.json
 //   node scripts/research/record-ai-baseline.js --preset a9        # test/fixtures/assignment9-baseline.json
 //   node scripts/research/record-ai-baseline.js --preset a10       # test/fixtures/assignment10-baseline.json
-//   node scripts/research/record-ai-baseline.js --preset current   # test/fixtures/assignment12-baseline.json
+//   node scripts/research/record-ai-baseline.js --preset a12       # test/fixtures/assignment12-baseline.json
+//   node scripts/research/record-ai-baseline.js --preset current   # test/fixtures/assignment14-baseline.json
 //
 // Presets: a6 = the AI of Assignments 6-7 (AIPlayer.LEGACY_A6); a8 = the AI of
 // Assignment 8 (AIPlayer.LEGACY_A8); a9 = the AI of Assignment 9
 // (AIPlayer.LEGACY_A9); a10 = the heuristic AI of Assignment 10
-// (AIPlayer.chooseAction with no options); current = the production AI
-// (AIPlanner.chooseAction, since Assignment 12; 2 games per player count).
+// (AIPlayer.chooseAction with no options); a12 = the planner AI of Assignment
+// 12 (AIPlanner.A12); current = the production AI (AIPlanner.chooseAction with
+// AIPlanner.PRODUCTION, since Assignment 14). The planners: 2 games per player
+// count.
 // Re-record a fixture only for an intended change to that AI.
 // Games: 10 per player count, seeds 6000 + 1000 * players + i, difficulty
 // rotating easy / normal / hard by seed, each AI with its own seeded stream
@@ -40,11 +43,13 @@ const PRESETS = {
     a10: { options: null, file: 'assignment10-baseline.json', from: 'the production AI since Assignment 10' },
     // The planner's wall-clock budget is lifted so the recording does not
     // depend on the machine's speed (the state budget is unlimited anyway)
-    current: { options: { planner: { ...E.AIPlanner.PRODUCTION, maxMs: Infinity } }, planner: true, games: 2, file: 'assignment12-baseline.json',
+    a12: { options: { planner: { ...E.AIPlanner.A12, maxMs: Infinity } }, planner: true, games: 2, file: 'assignment12-baseline.json',
         from: 'the production planner AI since Assignment 12 (four actions ahead), without the wall-clock budget' },
+    current: { options: { planner: { ...E.AIPlanner.PRODUCTION, maxMs: Infinity } }, planner: true, games: 2, file: 'assignment14-baseline.json',
+        from: 'the production planner AI since Assignment 14 (four actions ahead, endgame cash valuation and scoring-link candidates), without the wall-clock budget' },
 };
 const p = PRESETS[preset];
-if (!p) { console.error('usage: record-ai-baseline.js --preset a6|a8|a9|a10|current'); process.exit(2); }
+if (!p) { console.error('usage: record-ai-baseline.js --preset a6|a8|a9|a10|a12|current'); process.exit(2); }
 
 const games = {};
 for (const players of [2, 3, 4]) {

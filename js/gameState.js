@@ -898,6 +898,44 @@ class GameState {
         return scores;
     }
 
+    // VP a link on `connId` scores at an era's end in the current position:
+    // 1 VP per link icon in adjacent locations. Link icons are printed only
+    // on the FLIPPED face of industry tiles; unflipped tiles contribute
+    // nothing. Merchant locations count 2 each regardless of tile state.
+    linkValue(connId) {
+        const conn = CONNECTIONS.find(c => c.id === connId);
+        if (!conn) return 0;
+        let linkValue = 0;
+        for (const cityId of conn.cities) {
+            if (isCity(cityId)) {
+                const city = CITIES[cityId];
+                for (let i = 0; i < city.slots.length; i++) {
+                    const tile = this.boardIndustries[`${cityId}_${i}`];
+                    if (tile && tile.flipped) {
+                        linkValue += tile.tileData.linkVP;
+                    }
+                }
+            }
+            if (isMerchantLocation(cityId)) {
+                linkValue += 2;
+            }
+            if (isBreweryFarm(cityId)) {
+                const tile = this.breweryFarmTiles[cityId];
+                if (tile && tile.flipped) {
+                    linkValue += tile.tileData.linkVP;
+                }
+            }
+        }
+        // Also score brewery farms that this link passes through (e.g. kidderminster-worcester via southern)
+        if (conn.viaBrewery) {
+            const tile = this.breweryFarmTiles[conn.viaBrewery];
+            if (tile && tile.flipped) {
+                linkValue += tile.tileData.linkVP;
+            }
+        }
+        return linkValue;
+    }
+
     calculateEraScore() {
         const scores = this.players.map(p => ({
             playerId: p.id,
@@ -910,46 +948,10 @@ class GameState {
 
         // Score links
         for (const [connId, link] of Object.entries(this.boardLinks)) {
-            const conn = CONNECTIONS.find(c => c.id === connId);
-            if (!conn) continue;
-
-            // Each link scores 1 VP per link icon in adjacent locations.
-            // Link icons are printed only on the FLIPPED face of industry tiles;
-            // unflipped tiles contribute nothing. Merchant locations count
-            // 2 each regardless of tile state.
-            let linkValue = 0;
-            for (const cityId of conn.cities) {
-                if (isCity(cityId)) {
-                    const city = CITIES[cityId];
-                    for (let i = 0; i < city.slots.length; i++) {
-                        const key = `${cityId}_${i}`;
-                        const tile = this.boardIndustries[key];
-                        if (tile && tile.flipped) {
-                            linkValue += tile.tileData.linkVP;
-                        }
-                    }
-                }
-                if (isMerchantLocation(cityId)) {
-                    linkValue += 2;
-                }
-                if (isBreweryFarm(cityId)) {
-                    const tile = this.breweryFarmTiles[cityId];
-                    if (tile && tile.flipped) {
-                        linkValue += tile.tileData.linkVP;
-                    }
-                }
-            }
-            // Also score brewery farms that this link passes through (e.g. kidderminster-worcester via southern)
-            if (conn.viaBrewery) {
-                const tile = this.breweryFarmTiles[conn.viaBrewery];
-                if (tile && tile.flipped) {
-                    linkValue += tile.tileData.linkVP;
-                }
-            }
-
+            if (!CONNECTIONS.find(c => c.id === connId)) continue;
             const playerScore = scores.find(s => s.playerId === link.playerId);
             if (playerScore) {
-                playerScore.linkVP += linkValue;
+                playerScore.linkVP += this.linkValue(connId);
             }
         }
 
