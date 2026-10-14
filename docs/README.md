@@ -22,6 +22,8 @@ from, and how to run it. Everything more technical is here.
 
 ## Research
 
+- [Human playtesting workflow](../research/human-games/README.md): Assignment 17. Export completed browser games, add logs manually, generate a batch report and inspect individual actions without changing AI strategy.
+
 - [`research/ai-baseline-audit.md`](research/ai-baseline-audit.md): an audit of the existing AI (Assignment 5). It covers how each difficulty decides; legality, fairness and hidden information; the baseline strength experiments; the measured weaknesses; and recommendations for the AI work.
 - [`research/ai-baseline-results.md`](research/ai-baseline-results.md): the full generated result tables.
 - [`research/ai-corrections-a6.md`](research/ai-corrections-a6.md): Assignment 6. It covers the fairness correction (the AI decides on the player's observation) and the exact rounds-remaining count; the preserved legacy baseline; the regression tests; and before-and-after experiments. Full tables are in [`research/ai-corrections-a6-results.md`](research/ai-corrections-a6-results.md).

@@ -135,3 +135,12 @@ Interpretations where the rulebook is not explicit are listed in
 - **Develop to skip weak tiles.** Level III and higher tiles are worth the iron.
 - **Build Level II+ tiles in the Canal Era.** They stay and score in both eras.
 - **Don't ignore income.** It compounds every round.
+
+## Export a completed game
+
+After the Rail scoring review, click **Export Game Log** on the final results
+screen. The JSON is a complete diagnostic record, including hidden cards;
+export is unavailable during ordinary play. It is downloaded locally, never
+uploaded. An unavailable/failed recording is labelled on that screen. See the
+[offline playtesting workflow](../research/human-games/README.md) to collect
+games, generate reports and investigate decisions.
